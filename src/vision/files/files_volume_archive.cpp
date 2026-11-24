@@ -55,6 +55,34 @@ void archive_final_root_read_observed(bool found,bool pending) noexcept;
 #endif
 
 namespace ck::vision {
+
+bool FilesVolumeArchiveManifestBudget::add(std::uint64_t bytes) noexcept {
+    if (bytes > ck::files::NativeArchiveWriteRequest::default_max_recipe_bytes - bytes_)
+        return false;
+    bytes_ += bytes;
+    return true;
+}
+
+bool FilesVolumeArchiveManifestBudget::add(const FilesVolumeRecord &source) noexcept {
+    // Four string lengths, consistency/encoding fields, and the loss count.
+    return add(48) && add(source.identity.size()) && add(source.name.size()) &&
+           add(source.mount_point.size()) && add(source.filesystem.size());
+}
+
+bool FilesVolumeArchiveManifestBudget::add(const FilesVolumeArchiveEntry &entry) noexcept {
+    const auto extents = entry.extents.size();
+    return extents <= ck::files::NativeArchiveWriteRequest::default_max_extents &&
+           add(48) && add(entry.path.size()) && add(entry.link_target.size()) && add(24 * extents);
+}
+
+bool FilesVolumeArchiveManifestBudget::add(const FilesVolumeArchiveLoss &loss) noexcept {
+    return add(32) && add(loss.path.size()) && add(loss.diagnostic.size());
+}
+
+bool FilesVolumeArchiveManifestBudget::fits_image(std::uint64_t logical_data_bytes) const noexcept {
+    return logical_data_bytes <= ck::files::NativeArchiveWriteRequest::default_max_logical_size - bytes_;
+}
+
 namespace {
 using ck::files::AdapterError;
 using ck::files::ErrorDomain;
@@ -64,7 +92,7 @@ using ck::files::UnavailableObservation;
 
 constexpr std::array<char, 8> kMagic{'C', 'K', 'A', 'R', 'V', '0', '1', '\0'};
 constexpr std::uint32_t kVersion = 2;
-constexpr std::uint64_t kHeaderSize = 56;
+constexpr auto kHeaderSize = FilesVolumeArchiveManifestBudget::header_size;
 
 struct ArchiveDiagnostic final {
     ObservationState state = ObservationState::Failed;
@@ -424,7 +452,7 @@ bool has_material_sparse_hole(const std::vector<EncodedEntry> &entries) {
         for (const auto &extent : entry.extents) {
             if (extent.offset >= previous_end && extent.offset - previous_end >= kMaterialSparseHoleBytes)
                 return true;
-            previous_end = extent.offset + extent.bytes.size();
+            previous_end = extent.offset + extent.size();
         }
         if (entry.logical_size >= previous_end && entry.logical_size - previous_end >= kMaterialSparseHoleBytes)
             return true;
@@ -435,7 +463,8 @@ bool has_material_sparse_hole(const std::vector<EncodedEntry> &entries) {
 Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArchiveDocument &document,
                                                             std::uint64_t &data_size,
                                                             std::uint64_t &data_bytes,
-                                                            std::stop_token stop_token) {
+                                                            std::stop_token stop_token,
+                                                            bool streamed) {
     if (document.source.identity.empty() || document.source.mount_point.empty())
         return Observation<std::vector<EncodedEntry>>::unavailable(
             ObservationState::Unknown, error(AdapterError::UnqualifiedIdentity, "volume_archive.source_identity"));
@@ -455,7 +484,16 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
         document.path_encoding != ck::files::NameEncoding::WindowsUtf16)
         return Observation<std::vector<EncodedEntry>>::unavailable(
             ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.path_encoding"));
+    const auto manifest_limit = [] {
+        return Observation<std::vector<EncodedEntry>>::unavailable(ObservationState::Unknown,
+            error(AdapterError::InventoryLimit, "volume_archive.manifest_limit"));
+    };
+    FilesVolumeArchiveManifestBudget manifest_budget;
+    if (!manifest_budget.add(document.source))
+        return manifest_limit();
     for (const auto &loss : document.losses) {
+        if (!manifest_budget.add(loss))
+            return manifest_limit();
         if (loss.entry_index >= document.entries.size() ||
             (!loss.path.empty() && !safe_relative_path(loss.path, document.path_encoding, true)) ||
             loss.diagnostic.empty())
@@ -471,6 +509,8 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
         if (stop_token.stop_requested())
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
+        if (!manifest_budget.add(entry))
+            return manifest_limit();
         if (entry.kind < FilesVolumeArchiveEntryKind::Directory ||
             entry.kind > FilesVolumeArchiveEntryKind::Unsupported)
             return Observation<std::vector<EncodedEntry>>::unavailable(
@@ -495,19 +535,21 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
         value.source = &entry;
         std::uint64_t previous_end = 0;
         for (const auto &extent : entry.extents) {
-            if (extent.bytes.empty() || extent.offset < previous_end || extent.offset > entry.logical_size)
+            const auto length = extent.size();
+            if ((streamed ? !extent.bytes.empty() : extent.streamed_length != 0) ||
+                length == 0 || extent.offset < previous_end || extent.offset > entry.logical_size)
                 return Observation<std::vector<EncodedEntry>>::unavailable(
                     ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.extent_order"));
-            if (extent.bytes.size() > entry.logical_size - extent.offset)
+            if (length > entry.logical_size - extent.offset)
                 return Observation<std::vector<EncodedEntry>>::unavailable(
                     ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.extent_bounds"));
             std::uint64_t end = 0;
-            if (!checked_add(extent.offset, extent.bytes.size(), end))
+            if (!checked_add(extent.offset, length, end))
                 return Observation<std::vector<EncodedEntry>>::unavailable(
                     ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.extent_overflow"));
             previous_end = end;
             std::uint64_t next_data_bytes = 0;
-            if (!checked_add(data_bytes, extent.bytes.size(), next_data_bytes))
+            if (!checked_add(data_bytes, length, next_data_bytes))
                 return Observation<std::vector<EncodedEntry>>::unavailable(
                     ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.data_bytes"));
             data_bytes = next_data_bytes;
@@ -521,11 +563,13 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
             if (!checked_add(data_size, extent.offset, archive_offset))
                 return Observation<std::vector<EncodedEntry>>::unavailable(
                     ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.archive_offset"));
-            value.extents.push_back({extent.offset, archive_offset, extent.bytes.size()});
+            value.extents.push_back({extent.offset, archive_offset, extent.size()});
         }
         data_size = next_data_size;
         encoded.push_back(std::move(value));
     }
+    if (!manifest_budget.fits_image(data_size))
+        return manifest_limit();
     return Observation<std::vector<EncodedEntry>>::available(std::move(encoded));
 }
 
@@ -1101,7 +1145,7 @@ Observation<bool> revalidate_archive_source(const FilesVolumeArchiveSourceRevali
 
 Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     auto &request, std::stop_token stop_token,
-    const FilesVolumeArchiveSourceRevalidation *source) {
+    const FilesVolumeArchiveSourceRevalidation *source, FilesVolumeArchivePayload *payload = nullptr) {
     using R=Observation<FilesVolumeArchiveWriteResult>;
     if(!valid_request(request))return R::unavailable(ObservationState::Unsupported,error(AdapterError::PlanInvalid,"volume_archive.request"));
     if(!request.destination_owner||!request.prepared_journal_root||!request.native_journal_name||request.append_journal||request.append_journal_evidence)
@@ -1111,7 +1155,8 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     if(std::any_of(request.document.losses.begin(),request.document.losses.end(),[](const auto& l){return l.hard_failure;}))
         return R::unavailable(ObservationState::Unsupported,error(AdapterError::ProviderReviewRequired,"volume_archive.hard_loss"));
     std::uint64_t data_size=0,data_bytes=0;
-    auto enc=validate_and_encode(request.document,data_size,data_bytes,stop_token);
+    const bool streamed = payload && payload->scratch;
+    auto enc=validate_and_encode(request.document,data_size,data_bytes,stop_token,streamed);
     if(!enc.value())return R::unavailable(enc.state(),enc.unavailable_detail()->error);
     auto encoded=std::move(enc).take_value();std::vector<std::byte> manifest;append_manifest(manifest,request.document,encoded);
     std::uint64_t data_offset=0,logical_size=0;
@@ -1154,6 +1199,12 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
         return R::unavailable(denied->state, denied->error);
     // The worker owns a mutable request and can transfer its buffers. The
     // synchronous entry point borrows a const request and keeps its bytes.
+    ck::files::NativeArchiveStream stream;
+    if (streamed) {
+        stream.file = std::move(payload->scratch);
+        stream.digest = payload->digest;
+        stream.byte_limit = payload->byte_limit;
+    }
     for (std::size_t entry = 0; entry < encoded.size(); ++entry) {
         const auto &layout = encoded[entry].extents;
         auto &extents = request.document.entries[entry].extents;
@@ -1161,10 +1212,14 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
             if (stop_token.stop_requested())
                 return R::unavailable(ObservationState::Unknown,
                     error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
-            native.extents.push_back({data_offset + layout[index].archive_offset, std::move(extents[index].bytes)});
+            const auto offset = data_offset + layout[index].archive_offset;
+            if (streamed)
+                stream.extents.push_back({offset, layout[index].length});
+            else
+                native.extents.push_back({offset, std::move(extents[index].bytes)});
         }
     }
-    auto began=ck::files::NativeArchiveWriteJob::begin(std::move(native));
+    auto began=ck::files::NativeArchiveWriteJob::begin(std::move(native), std::move(stream));
     if(!began.value())return R::unavailable(began.state(),began.unavailable_detail()->error);
     auto job = std::move(began).take_value();
     using Phase = ck::files::NativeArchivePhase;
@@ -1267,7 +1322,7 @@ std::string FilesVolumeArchiveReview::default_archive_name(std::string_view volu
 
 Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
     const FilesVolumeArchiveDocument &document, ck::files::NativeAbsolutePath destination_directory,
-    std::string archive_name, FilesVolumeArchiveDestinationState destination_state) {
+    std::string archive_name, FilesVolumeArchiveDestinationState destination_state, bool streamed) {
     if (!document.source.identity.empty() && !document.source.mount_point.empty()) {
         // Continue below; the explicit checks are kept separate so every
         // refusal has a stable operation name for the status/review layer.
@@ -1289,7 +1344,7 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
 
     std::uint64_t logical_bytes = 0;
     std::uint64_t data_bytes = 0;
-    auto encoded = validate_and_encode(document, logical_bytes, data_bytes, {});
+    auto encoded = validate_and_encode(document, logical_bytes, data_bytes, {}, streamed);
     if (!encoded.value())
         return review_rejected<Pointer>(encoded.unavailable_detail()->state,
                                         static_cast<AdapterError>(encoded.unavailable_detail()->error.code),
@@ -1309,7 +1364,7 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
             // exposes leading, interior and trailing holes, including a
             // logical file whose entire contents are a hole.
             if (std::accumulate(entry.extents.begin(), entry.extents.end(), std::uint64_t{0},
-                    [](std::uint64_t bytes, const auto &extent) { return bytes + extent.bytes.size(); }) <
+                    [](std::uint64_t bytes, const auto &extent) { return bytes + extent.size(); }) <
                 entry.logical_size)
                 ++summary.sparse_files;
             break;
@@ -1331,8 +1386,7 @@ using ArchiveDestination = std::shared_ptr<const ck::files::DirectoryCursor>;
 
 struct ArchiveBindings {
     ArchiveDestination destination;
-    FilesVolumeArchiveSourceRevalidation source;
-    std::optional<FilesVolumeArchiveDocument> capture;
+    std::optional<FilesVolumeArchiveSourceCapture> capture;
 };
 
 Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
@@ -1507,14 +1561,15 @@ struct FilesVolumeArchiveService::State final {
             if (!conflict.value())
                 return fail(*conflict.unavailable_detail());
             auto review = FilesVolumeArchiveReview::create(source.document, std::move(value.destination_directory),
-                                                           std::move(value.archive_name), *conflict.value());
+                                                           std::move(value.archive_name), *conflict.value(),
+                                                           static_cast<bool>(source.payload.scratch));
             if (!review.value())
                 return fail(*review.unavailable_detail());
             result.review = std::move(review).take_value();
             result.state = FilesVolumeArchivePlanningState::Ready;
             if (!finish_plan(std::move(result)))
                 return {};
-            return {std::move(destination), std::move(source.revalidate), std::move(source.document)};
+            return {std::move(destination), std::move(source)};
         } catch (...) {
             result.state = FilesVolumeArchivePlanningState::WorkerFault;
             finish_plan(std::move(result));
@@ -1584,7 +1639,7 @@ struct FilesVolumeArchiveService::State final {
                 cache_error(error(AdapterError::InterruptedRead, "volume_archive.cancelled", ObservationState::Unknown));
                 return;
             }
-            const auto source = bindings.source ? &bindings.source : nullptr;
+            const auto source = bindings.capture ? &bindings.capture->revalidate : nullptr;
             const auto source_checked = revalidate_archive_source(source, token);
             if (!source_checked.value()) { cache_error(*source_checked.unavailable_detail()); return; }
             if (destination) {
@@ -1625,9 +1680,8 @@ struct FilesVolumeArchiveService::State final {
             if(!guard.value()){destination.reset();cache_error(*guard.unavailable_detail());return;}
             auto scope=std::move(guard).take_value();
             auto document = bindings.capture
-                ? Observation<FilesVolumeArchiveDocument>::available(std::move(*bindings.capture))
+                ? Observation<FilesVolumeArchiveDocument>::available(std::move(bindings.capture->document))
                 : value.build_document(token);
-            bindings.capture.reset();
             if(!document.value()){scope.reset();destination.reset();cache_error(*document.unavailable_detail());return;}
             auto complete=std::move(document).take_value();complete.consistency=value.consistency;
             if(!archive_source_matches(value.source,complete.source)){
@@ -1643,7 +1697,8 @@ struct FilesVolumeArchiveService::State final {
                     .append_journal={}, .append_journal_evidence={}, .destination_owner=destination,
                     .prepared_journal_root=root, .native_journal_name=*journal_name,
                     .native_journal_id=value.journal_id, .journal_limits=value.journal_limits};
-                return write_bound_volume_archive(request, token, source);
+                auto *payload = bindings.capture ? &bindings.capture->payload : nullptr;
+                return write_bound_volume_archive(request, token, source, payload);
             };
             auto written=invoke();scope.reset();bindings = {};
             if(!written.value()){cache_error(*written.unavailable_detail());return;}
@@ -1678,7 +1733,7 @@ struct FilesVolumeArchiveService::State final {
         };
         try {
             const auto &review = job.approval.review();
-            if (!bindings.destination || !bindings.source || !bindings.capture) {
+            if (!bindings.destination || !bindings.capture || !bindings.capture->revalidate) {
                 fail(error(AdapterError::PlanDecisionStale, "volume_archive.review.binding_missing",
                            ObservationState::Changed));
                 return;
@@ -1701,7 +1756,7 @@ struct FilesVolumeArchiveService::State final {
                  offset += sizeof(transaction_id))
                 for (std::size_t byte = 0; byte < sizeof(transaction_id); ++byte)
                     transaction_id |= std::to_integer<std::uint64_t>(journal_id.bytes[offset + byte]) << (byte * 8U);
-            bindings.capture->losses_reviewed =
+            bindings.capture->document.losses_reviewed =
                 review->losses().empty() || job.approval.continued_with_listed_losses();
             FilesVolumeArchiveRequest request{
                 .source=review->source(), .destination_directory=review->destination_directory(),

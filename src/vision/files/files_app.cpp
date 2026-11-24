@@ -366,6 +366,7 @@ struct FilesApp::State {
     FilesOperationRecoveryService *operation_recovery_service = nullptr;
     FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service = nullptr;
     std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root;
+    std::shared_ptr<const ck::files::NativeAbsolutePath> volume_archive_scratch_root;
     FilesSettingsBinding settings;
     std::uint64_t settings_revision = 0;
     bool settings_waiting = false, settings_feedback_current = false;
@@ -499,7 +500,8 @@ struct FilesApp::State {
           FilesVolumeArchiveService *archive_service, FilesVolumeArchiveRecoveryService *archive_recovery,
           FilesVolumeArchiveRecoveryCleanupService *archive_recovery_cleanup,
           FilesOperationRecoveryService *operation_recovery,
-          FilesOperationRecoveryCleanupService *operation_recovery_cleanup)
+          FilesOperationRecoveryCleanupService *operation_recovery_cleanup,
+          std::shared_ptr<const ck::files::NativeAbsolutePath> archive_scratch_root)
         : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
           execution_service(execution), volume_service(volumes),
           volume_archive_service(archive_service),
@@ -508,6 +510,7 @@ struct FilesApp::State {
           operation_recovery_service(operation_recovery),
           operation_recovery_cleanup_service(operation_recovery_cleanup),
           operation_journal_root(std::move(journal_root)),
+          volume_archive_scratch_root(std::move(archive_scratch_root)),
           settings(std::move(supplied_settings)), wake(signal),
           host_quit(std::move(quit)), commands(app.commands()) {
         if (!services[0] || !services[1] || services[0] == services[1] || !host_quit)
@@ -1378,6 +1381,8 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: archive recovery review is required");
                 if (!ck::files::NativeArchiveWriteJob::platform_supports_publication())
                     return unavailable("Copy: archive writes unsupported");
+                if (!volume_archive_scratch_root || !volume_archive_scratch_root->is_valid())
+                    return unavailable("Copy unavailable: private archive capture storage is not configured");
                 if (!volume->archive.root)
                     return unavailable("Copy unavailable: source volume mount identity is unavailable");
                 if (!archive_destination_ready(active))
@@ -2611,8 +2616,8 @@ struct FilesApp::State {
         }
         VolumeArchiveOrigin origin{active, panes[active].navigation, panes[destination_pane].navigation,
                                    *volume, destination_location};
-        auto capture_source = [source = origin.volume](std::stop_token token) {
-            return capture_native_volume_archive_source(source, FilesVolumeArchiveConsistency::Live, token);
+        auto capture_source = [source = origin.volume, scratch = volume_archive_scratch_root](std::stop_token token) {
+            return capture_native_volume_archive_source(source, *scratch, FilesVolumeArchiveConsistency::Live, token);
         };
         FilesVolumeArchivePlanningRequest request{
             origin.volume, *destination, FilesVolumeArchiveReview::default_archive_name(origin.volume.name),
@@ -3554,6 +3559,19 @@ struct FilesApp::State {
             if (reply.error && (reply.error->error.operation == "volume_archive.source.entry_changed" ||
                                 reply.error->error.operation == "volume_archive.source.directory_changed")) {
                 report_archive_error("Archive source changed during capture. Start a new review.");
+                return;
+            }
+            if (reply.error && (archive_storage_exhausted(reply.error->error.domain, reply.error->error.code) ||
+                                reply.error->error.operation == "volume_archive.source.scratch_limit")) {
+                report_archive_error("Archive capture storage or quota limit reached.");
+                return;
+            }
+            if (reply.error && reply.error->error.operation == "volume_archive.source.image_limits") {
+                report_archive_error("Archive exceeds the supported image size or extent count.");
+                return;
+            }
+            if (reply.error && reply.error->error.operation == "volume_archive.manifest_limit") {
+                report_archive_error("Archive exceeds the supported manifest or image size.");
                 return;
             }
             if (reply.error && reply.error->error.operation == "volume_archive.source.version_unavailable") {
@@ -4505,13 +4523,15 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
                    FilesVolumeArchiveRecoveryService *volume_archive_recovery_service,
                    FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service,
                    FilesOperationRecoveryService *operation_recovery_service,
-                   FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service)
+                   FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service,
+                   std::shared_ptr<const ck::files::NativeAbsolutePath> volume_archive_scratch_root)
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
                                      completion_services, planning_service, execution_service,
                                      std::move(operation_journal_root), std::move(settings), volume_service,
                                      volume_archive_service,
                                      volume_archive_recovery_service, volume_archive_recovery_cleanup_service,
-                                     operation_recovery_service, operation_recovery_cleanup_service)) {}
+                                     operation_recovery_service, operation_recovery_cleanup_service,
+                                     std::move(volume_archive_scratch_root))) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));

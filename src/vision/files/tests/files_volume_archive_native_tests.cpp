@@ -146,7 +146,7 @@ void live_capture_refuses_observed_change(bool directory_change) {
     assert(metadata.identity.value() && metadata.mount_id.value());
     selected.archive.root = {*metadata.identity.value(), *metadata.mount_id.value()};
     root.reset();
-    assert(capture_native_volume_archive_source(selected).value());
+    assert(capture_native_volume_archive_source(selected, address(path)).value());
 
     struct stat file_stat{}, changed_stat{};
     assert(fstat(file, &file_stat) == 0);
@@ -155,7 +155,7 @@ void live_capture_refuses_observed_change(bool directory_change) {
     modified.tv_sec -= 10;
     CaptureMutation mutation{file, directory, file_stat.st_dev, file_stat.st_ino, modified, directory_change};
     capture_mutation = &mutation;
-    const auto changed = capture_native_volume_archive_source(selected);
+    const auto changed = capture_native_volume_archive_source(selected, address(path));
     capture_mutation = nullptr;
     assert(mutation.injected);
     assert(fstat(file, &file_stat) == 0 && file_stat.st_size == 4);

@@ -61,6 +61,9 @@ struct FilesVolumeArchiveLoss final {
 struct FilesVolumeArchiveExtent final {
     std::uint64_t offset = 0;
     std::vector<std::byte> bytes;
+    std::uint64_t streamed_length = 0;
+
+    std::uint64_t size() const noexcept { return streamed_length ? streamed_length : bytes.size(); }
 };
 
 struct FilesVolumeArchiveEntry final {
@@ -83,6 +86,20 @@ struct FilesVolumeArchiveDocument final {
     std::vector<FilesVolumeArchiveEntry> entries;
     std::vector<FilesVolumeArchiveLoss> losses;
     bool losses_reviewed = false;
+};
+
+// Counts the encoded header and manifest against the native inline recipe limit.
+class FilesVolumeArchiveManifestBudget final {
+  public:
+    static constexpr std::uint64_t header_size = 56;
+    bool add(const FilesVolumeRecord &source) noexcept;
+    bool add(const FilesVolumeArchiveEntry &entry) noexcept;
+    bool add(const FilesVolumeArchiveLoss &loss) noexcept;
+    bool fits_image(std::uint64_t logical_data_bytes) const noexcept;
+
+  private:
+    bool add(std::uint64_t bytes) noexcept;
+    std::uint64_t bytes_ = header_size;
 };
 
 enum class FilesVolumeArchiveDestinationState : std::uint8_t {
@@ -135,7 +152,7 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
 
     static ck::files::Observation<Pointer> create(
         const FilesVolumeArchiveDocument &document, ck::files::NativeAbsolutePath destination_directory,
-        std::string archive_name, FilesVolumeArchiveDestinationState destination_state);
+        std::string archive_name, FilesVolumeArchiveDestinationState destination_state, bool streamed = false);
 
     static std::string default_archive_name(std::string_view volume_name);
 
@@ -178,9 +195,16 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
 using FilesVolumeArchiveSourceRevalidation =
     std::function<ck::files::Observation<bool>(std::stop_token)>;
 
+struct FilesVolumeArchivePayload final {
+    std::unique_ptr<ck::files::IndexByteFile> scratch;
+    std::array<std::byte, 32> digest{};
+    std::uint64_t byte_limit = 0;
+};
+
 struct FilesVolumeArchiveSourceCapture final {
     FilesVolumeArchiveDocument document;
     FilesVolumeArchiveSourceRevalidation revalidate;
+    FilesVolumeArchivePayload payload{};
 };
 
 // Worker-owned planning boundary. It builds and validates the immutable source

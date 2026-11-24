@@ -66,6 +66,9 @@ clipboard.
   in the active-pane status. A read-only destination mount disables Copy.
   The archive worker checks the mount again before writing. Approval creates a
   versioned sparse filesystem archive with a manifest and file data. The
+  worker holds the captured data in private, unnamed scratch storage while
+  you review it. That storage needs room for the captured data extents until
+  the archive has been written to its destination staging file. The
   review shows consistency, logical/data bytes, sparse shape, links, and
   explicit preservation losses, including ACLs and extended attributes.
   Live archive creation has passed native Linux ext4, XFS, and Btrfs

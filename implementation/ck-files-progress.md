@@ -1,5 +1,41 @@
 # Files implementation evidence
 
+## 2026-11-24 — Disk-backed volume archive capture
+
+Files now seals captured data extents in private scratch storage and keeps the
+scratch handle on the worker through review. The worker charges the encoded
+manifest and scratch payload separately. The native writer releases the
+scratch handle before verifying the staged image. It checks the captured
+payload digest, inline manifest bytes, and holes before commit intent.
+
+The Files upgrade pins backend `d51e5a0` and ckVision `3d018210`. The
+ordinary-user Linux ARM64 ext4 xterm run captured 301,993,984 bytes into a
+369,099,815-byte sparse archive. Independent reconstruction matched the
+source SHA-256. The app's peak resident memory was 16,945,152 bytes. A
+separate 4 MiB sparse ext4 round trip passed on the same executable.
+
+The backend upgrade exposed a POSIX permanent-retirement regression. Two
+existing macOS tests caught an implementation that unlinked a pathname after
+checking identity. Backend `6291561` restored the typed refusal and requires
+the strict native capability before reviewed tree removal or two-way
+directory deletion. The final macOS ARM64 build passed all 115 Files, keymap,
+and shell CTest entries and the installed ckVision consumer. Linux ARM64
+ASan/UBSan passed 30 backend entries, including 24 archive cases and the
+reviewed tree and sync checks. One earlier parallel parent-flush injection
+miss was recorded. The case passed four isolated repeats on both the
+unmodified backend and the patch and passed the final serial suite.
+
+Windows runtime qualification is postponed. Native APFS archive publication
+remains open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release | `067555261c074e5bac95945272a7dd8c446fde902ee1d813ec4e7c735f92e078` |
+| Linux ARM64 Release and ext4 xterm | `bc44b870b232e0ce01cfc045605e9f57becdaf1f0a3dc953c182968bfd8be1cc` |
+| Linux ARM64 backend ASan/UBSan | `183c35432a819802cc515740e3bd3086a45c445fb5a03f74a14dbbdb0dd6fb6e` |
+| Large fixture xterm receipt | `39c6cd5ec22af32adfed1732db1cb07d174f2fdf533235726f367389735a1c49` |
+| Large fixture reconstruction and peak RSS | `e5ac5570ae9764bc69c0773e6dc9a54d30279925e66cca51d87fd92c53a74b41` |
+
 ## 2026-11-24 — Worker-owned archive payload
 
 Frontend `327f26d` keeps the captured bytes with the native source and

@@ -1,6 +1,6 @@
 {
-  "backend": "5578e8710265fb27979c239eef27c0e6c62c4cf2",
-  "backend_archive_sha256": "8ceead477a1bbc99f379c6073da6e4155f12a9730d643ac8ad29603cf2d2e0ab",
+  "backend": "d51e5a0e4d5bf284be02599702c4983e77efaeca",
+  "backend_archive_sha256": "c65f3d68f61cfe94dd293d267dbe9f88f3365191656afaa22f88bf9addd96f84",
   "ckvision": "3d018210de4f8ad724678aa97b0d0b0ddee69a43",
   "ckvision_version": "2.1.0"
 }

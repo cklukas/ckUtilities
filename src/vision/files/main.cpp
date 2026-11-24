@@ -171,7 +171,7 @@ int run(const std::vector<std::string> &args) {
             {std::move(loaded_settings.value), std::move(loaded_settings.diagnostic), &settings_service}, volume_service.get(),
             volume_archive_service.get(), volume_archive_recovery_service.get(),
             volume_archive_recovery_cleanup_service.get(), operation_recovery_service.get(),
-            operation_recovery_cleanup_service.get());
+            operation_recovery_cleanup_service.get(), std::make_shared<const NativeAbsolutePath>(*left_cache));
         keymap.load();
         application.run();
         settings_service.request_close();

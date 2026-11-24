@@ -62,7 +62,8 @@ class FilesApp final {
              FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr,
              FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service = nullptr,
              FilesOperationRecoveryService *operation_recovery_service = nullptr,
-             FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service = nullptr);
+             FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service = nullptr,
+             std::shared_ptr<const ck::files::NativeAbsolutePath> volume_archive_scratch_root = {});
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;

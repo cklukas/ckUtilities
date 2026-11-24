@@ -3,6 +3,8 @@
 #include "files_volume_source.hpp"
 
 #include "native_filesystem.hpp"
+#include "native_index_file.hpp"
+#include "sha256.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -275,10 +277,38 @@ Observation<bool> revalidate_source_root(const NativeAbsolutePath &route, const 
                               "volume_archive.source.mount_changed");
 }
 
+struct ArchiveScratch final {
+    std::unique_ptr<ck::files::IndexByteFile> file;
+    std::uint64_t limit = 0;
+    std::uint64_t written = 0;
+    ck::files::Sha256 digest;
+
+    Observation<bool> append(std::span<const std::byte> bytes, std::stop_token stop_token) {
+        if (bytes.size() > limit - written)
+            return unavailable<bool>(ObservationState::Unknown, AdapterError::InventoryLimit,
+                                     "volume_archive.source.scratch_limit");
+        while (!bytes.empty()) {
+            if (stop_token.stop_requested())
+                return unavailable<bool>(ObservationState::Unknown, AdapterError::InterruptedRead,
+                                         "volume_archive.source.cancelled");
+            const auto count = file->write_at(written, bytes);
+            if (!count.value())
+                return unavailable<bool>(*count.unavailable_detail());
+            if (*count.value() == 0 || *count.value() > bytes.size())
+                return unavailable<bool>(AdapterError::InvalidNativeResult, "volume_archive.source.scratch_write");
+            digest.update(bytes.first(*count.value()));
+            written += *count.value();
+            bytes = bytes.subspan(*count.value());
+        }
+        return Observation<bool>::available(true);
+    }
+};
+
 Observation<FilesVolumeArchiveDocument> capture_volume_document(
     const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
     const FilesVolumeArchiveSourceLimits &limits, std::shared_ptr<DirectoryCursor> root,
-    ck::files::NameEncoding path_encoding, std::uint64_t root_mount, BasicMetadata root_metadata) {
+    ck::files::NameEncoding path_encoding, std::uint64_t root_mount, BasicMetadata root_metadata,
+    ArchiveScratch &scratch) {
     FilesVolumeArchiveDocument document;
     document.source = source;
     document.consistency = consistency;
@@ -292,11 +322,32 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
     frames.push_back({std::move(root), {}, 0, std::move(root_metadata)});
     std::vector<std::pair<ObjectIdentity, std::uint64_t>> hard_links;
     std::uint64_t next_hard_link_group = 1;
+    constexpr auto max_logical_size = ck::files::NativeArchiveWriteRequest::default_max_logical_size;
+    constexpr auto max_data_extents = ck::files::NativeArchiveWriteRequest::default_max_extents - 2;
+    std::uint64_t logical_bytes = 0;
+    std::size_t extent_count = 0;
+    FilesVolumeArchiveManifestBudget manifest_budget;
+    const auto manifest_limit = [] {
+        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown, AdapterError::InventoryLimit,
+                                                        "volume_archive.manifest_limit");
+    };
+    if (!manifest_budget.add(document.source))
+        return manifest_limit();
+    std::size_t accounted_entries = 0;
+    std::size_t accounted_losses = 0;
 
     while (!frames.empty()) {
         if (stop_token.stop_requested())
             return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
                 AdapterError::InterruptedRead, "volume_archive.source.cancelled");
+        while (accounted_entries < document.entries.size())
+            if (!manifest_budget.add(document.entries[accounted_entries++]))
+                return manifest_limit();
+        while (accounted_losses < document.losses.size())
+            if (!manifest_budget.add(document.losses[accounted_losses++]))
+                return manifest_limit();
+        if (!manifest_budget.fits_image(logical_bytes))
+            return manifest_limit();
         auto &frame = frames.back();
         auto batch = frame.directory->read(1, stop_token);
         if (batch.error)
@@ -408,6 +459,12 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
                     entry.logical_size = metadata.logical_size.value() ? *metadata.logical_size.value() : 0;
                 } else {
                     entry.logical_size = layout.value()->logical_size;
+                    if (entry.logical_size > max_logical_size - logical_bytes ||
+                        layout.value()->ranges.size() > max_data_extents - extent_count)
+                        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
+                            AdapterError::InventoryLimit, "volume_archive.source.image_limits");
+                    logical_bytes += entry.logical_size;
+                    extent_count += layout.value()->ranges.size();
                     if (metadata.logical_size.value() && *metadata.logical_size.value() != entry.logical_size)
                         add_loss(document, index, path, FilesVolumeArchiveLossKind::Consistency, true,
                                  "logical size changed during layout inspection");
@@ -417,6 +474,9 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
                                  "held source was not retained for content reads");
                     else {
                         for (const auto &range : layout.value()->ranges) {
+                            if (range.length > scratch.limit - scratch.written)
+                                return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
+                                    AdapterError::InventoryLimit, "volume_archive.source.scratch_limit");
                             std::uint64_t offset = range.offset;
                             std::uint64_t remaining = range.length;
                             while (remaining != 0) {
@@ -429,14 +489,19 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
                                              "data extent could not be read completely");
                                     break;
                                 }
-                                entry.extents.push_back({offset, std::move(bytes).take_value().bytes});
-                                const auto count = entry.extents.back().bytes.size();
+                                const auto &data_bytes = bytes.value()->bytes;
+                                const auto stored = scratch.append(data_bytes, stop_token);
+                                if (!stored.value())
+                                    return unavailable<FilesVolumeArchiveDocument>(*stored.unavailable_detail());
+                                const auto count = data_bytes.size();
                                 offset += count;
                                 remaining -= count;
                                 if (stop_token.stop_requested())
                                     return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
                                         AdapterError::InterruptedRead, "volume_archive.source.cancelled");
                             }
+                            if (offset != range.offset)
+                                entry.extents.push_back({range.offset, {}, offset - range.offset});
                         }
                     }
                 }
@@ -499,7 +564,8 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
 } // namespace
 
 Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_source(
-    const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
+    const FilesVolumeRecord &source, const NativeAbsolutePath &scratch_root,
+    FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
     FilesVolumeArchiveSourceLimits limits) {
     if (source.identity.empty() || source.mount_point.empty())
         return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Unknown,
@@ -545,6 +611,12 @@ Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_sourc
     if (!root)
         return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Failed,
             AdapterError::InvalidNativeResult, "volume_archive.source.root");
+    // Scratch creation can change directory version metadata. Establish the
+    // capture baseline after the private file has left the namespace.
+    auto file = ck::files::create_native_detached_index_file(scratch_root);
+    if (!file.value())
+        return unavailable<FilesVolumeArchiveSourceCapture>(*file.unavailable_detail());
+    ArchiveScratch scratch{std::move(file).take_value(), limits.max_payload_bytes, 0, {}};
     const auto root_metadata = root->inspect_basic();
     if (!root_metadata.value())
         return unavailable<FilesVolumeArchiveSourceCapture>(*root_metadata.unavailable_detail());
@@ -553,7 +625,8 @@ Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_sourc
             AdapterError::MetadataChanged, "volume_archive.source.mount_changed");
 
     auto document = capture_volume_document(source, consistency, stop_token, limits, root,
-                                             root_address.value()->encoding(), expected.mount_id, *root_metadata.value());
+                                             root_address.value()->encoding(), expected.mount_id, *root_metadata.value(),
+                                             scratch);
     if (!document.value())
         return unavailable<FilesVolumeArchiveSourceCapture>(*document.unavailable_detail());
     const auto route = std::move(root_address).take_value();
@@ -563,8 +636,11 @@ Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_sourc
     auto revalidate = [route, held_root = std::move(root), expected](std::stop_token token) {
         return revalidate_source_root(route, *held_root, expected, token);
     };
+    FilesVolumeArchivePayload payload;
+    if (scratch.written != 0)
+        payload = {std::move(scratch.file), scratch.digest.digest(), scratch.limit};
     return Observation<FilesVolumeArchiveSourceCapture>::available(
-        {std::move(document).take_value(), std::move(revalidate)});
+        {std::move(document).take_value(), std::move(revalidate), std::move(payload)});
 }
 
 } // namespace ck::vision

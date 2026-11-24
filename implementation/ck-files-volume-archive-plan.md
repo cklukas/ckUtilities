@@ -187,22 +187,20 @@ both directions and verified hard-link groups, symlink targets, ACL and xattr
 loss review, source-mount detachment, and destination-name conflicts.
 [Linux provider qualification](ck-files-progress.md#2026-11-24--native-xfs-and-btrfs-volume-archives)
 Positive native archive publication on macOS and Windows remains open.
-The worker retains the live capture during review. The dialog receives the
-source details, counts, and loss list. Approval transfers the captured extent
-buffers into the native writer. Capture still retains all payload bytes and
-the native writer still checks its in-memory recipe limits.
+The live worker captures allocated source extents into held private scratch
+storage. It charges the logical image, extent count, inline manifest, and
+scratch payload against explicit limits. The dialog receives source details,
+counts, and the loss list. Approval transfers the scratch owner and capture
+digest into the native writer. The writer pulls bounded chunks, retires the
+scratch handle, verifies the staged payload against the capture digest, and
+checks inline bytes and sparse layout before commit intent. Source and
+destination revalidation and held-object publication still govern commit.
 
-Large-volume qualification requires a bounded disk-backed recipe. Reuse the
-qualified native private scratch file boundary for pre-approval capture. Append
-only the bytes from held source extents and seal the exact extent offsets,
-lengths, and payload digest. Track scratch and manifest budgets separately.
-Retire the scratch handle on refusal, cancellation, or completion. Extend the
-native writer to pull bounded chunks from that same owner and compare the
-published candidate's readback to the capture seal before commit intent.
-Keep source and destination revalidation, journal ordering, sparse-layout
-verification, and held-object publication. Qualify short and failed scratch
-I/O, cancellation during each phase, source changes, data mismatches, and
-destination exhaustion alongside large sparse reconstruction on native hosts.
+Linux xterm reconstructed a sparse ext4 fixture with more than 288 MiB of
+stored extents. Backend ASan/UBSan covered short I/O, digest mismatch,
+cancellation, and invalid scratch range admission.
+[Disk-backed capture qualification](ck-files-progress.md#2026-11-24--disk-backed-volume-archive-capture)
+The full source and destination fault matrix remains a release gate.
 An earlier macOS broad app ASan run reported a libc++ container-overflow in
 `DirectoryCursor::read`. Frontend `60a835a` passed the matching macOS
 ASan/UBSan Files and keymap suite with default container annotations.

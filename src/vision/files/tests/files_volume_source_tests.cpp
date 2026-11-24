@@ -33,17 +33,27 @@ FilesVolumeRecord fixture(FilesVolumeArchiveSupport support) {
 #endif
     return result;
 }
+
+NativeAbsolutePath scratch_fixture_address() {
+#if defined(_WIN32)
+    return NativeAbsolutePath::from_windows(u"C:\\volume-source-scratch-fixture").take_value();
+#else
+    return NativeAbsolutePath::from_posix("/volume-source-scratch-fixture").take_value();
+#endif
+}
 } // namespace
 
 CK_TEST(native_volume_source_refuses_unqualified_capability_before_traversal) {
-    const auto result = capture_native_volume_archive_source(fixture(FilesVolumeArchiveSupport::Unknown));
+    const auto result = capture_native_volume_archive_source(fixture(FilesVolumeArchiveSupport::Unknown),
+                                                             scratch_fixture_address());
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Unknown);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.capability");
 }
 
 CK_TEST(native_volume_source_requires_a_bound_root_before_opening_mount) {
-    const auto result = capture_native_volume_archive_source(fixture(FilesVolumeArchiveSupport::LiveReadable));
+    const auto result = capture_native_volume_archive_source(fixture(FilesVolumeArchiveSupport::LiveReadable),
+                                                             scratch_fixture_address());
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Changed);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.unbound_mount");
@@ -51,7 +61,8 @@ CK_TEST(native_volume_source_requires_a_bound_root_before_opening_mount) {
 
 CK_TEST(native_volume_source_does_not_emulate_snapshot_provider) {
     auto value = fixture(FilesVolumeArchiveSupport::SnapshotPreferred);
-    const auto result = capture_native_volume_archive_source(value, FilesVolumeArchiveConsistency::Snapshot);
+    const auto result = capture_native_volume_archive_source(value, scratch_fixture_address(),
+                                                             FilesVolumeArchiveConsistency::Snapshot);
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Unsupported);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.snapshot_provider");
@@ -61,7 +72,8 @@ CK_TEST(native_volume_source_honors_cancellation_before_revalidation) {
     auto value = fixture(FilesVolumeArchiveSupport::LiveReadable);
     std::stop_source stop;
     stop.request_stop();
-    const auto result = capture_native_volume_archive_source(value, FilesVolumeArchiveConsistency::Live,
+    const auto result = capture_native_volume_archive_source(value, scratch_fixture_address(),
+                                                             FilesVolumeArchiveConsistency::Live,
                                                              stop.get_token());
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Unknown);
@@ -71,6 +83,10 @@ CK_TEST(native_volume_source_honors_cancellation_before_revalidation) {
 
 CK_TEST(native_volume_source_retains_the_root_used_to_capture_file_bytes) {
     ck::testing::ScratchDirectory scratch("volume-source-root", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
+                                 std::filesystem::perm_options::replace);
+#endif
     const auto parent = scratch.path() / std::string(140, 'a') / std::string(140, 'b');
     const auto source_path = parent / "source";
     const auto renamed = parent / "renamed";
@@ -99,14 +115,25 @@ CK_TEST(native_volume_source_retains_the_root_used_to_capture_file_bytes) {
 #endif
     std::move(opened).take_value().reset();
 
-    auto result = capture_native_volume_archive_source(selected);
-    CK_CHECK(result.value());
-    if (!result.value())
+    const auto scratch_root = NativeAbsolutePath::from_host(scratch.path());
+    CK_CHECK(scratch_root.value());
+    if (!scratch_root.value())
         return;
+    auto result = capture_native_volume_archive_source(selected, *scratch_root.value());
+    if (!result.value())
+        throw std::runtime_error(result.unavailable_detail()->error.operation);
     auto captured = std::move(result).take_value();
     CK_CHECK(captured.document.entries.size() == 2);
-    if (captured.document.entries.size() == 2)
+    if (captured.document.entries.size() == 2) {
         CK_CHECK(captured.document.entries[1].logical_size == 14);
+        const auto &extents = captured.document.entries[1].extents;
+        CK_CHECK(extents.size() == 1 && extents.front().bytes.empty() && extents.front().streamed_length == 14);
+    }
+    CK_CHECK(captured.payload.scratch);
+    if (captured.payload.scratch) {
+        const auto stored = captured.payload.scratch->size();
+        CK_CHECK(stored.value() && *stored.value() == 14);
+    }
     const auto live = captured.revalidate({});
     CK_CHECK(live.value() && *live.value());
 

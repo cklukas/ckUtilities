@@ -1,6 +1,8 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_index_file.hpp"
+#include "native_filesystem.hpp"
+#include "ck/file_io.hpp"
 #include "directory_index_sort_job.hpp"
 #include "directory_index_listing_job.hpp"
 #include "directory_index_lookup.hpp"
@@ -130,6 +132,31 @@ CK_TEST(index_file_native_rejects_overflow_before_IO_and_keeps_exact_size) {
         CK_CHECK(!file->read_at(offset, bytes).value());
     }
     CK_CHECK(take(file->size()) == 0);
+}
+CK_TEST(index_capture_file_is_absent_from_native_enumeration_while_writable) {
+    const ck::testing::ScratchDirectory scratch("files-capture-detached", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = scratch.path() / std::string(140, 'a') / std::string(140, 'b');
+    CK_CHECK(ck::io::create_directories(root));
+    private_root(root);
+    const auto neighbor = root / "ordinary.txt";
+    CK_CHECK(ck::io::write_file(neighbor, "neighbor"));
+    auto file = take(create_native_detached_index_file(address(root)));
+    const std::array payload{std::byte{0xff}, std::byte{0x01}};
+    write_all(*file, 0, payload);
+    NativeFileSystem filesystem;
+    const auto directory = take(filesystem.open_native_directory(address(root)));
+    const auto names = directory->read(4);
+#if defined(_WIN32)
+    const auto ordinary = NativeName::from_windows(u"ordinary.txt");
+#else
+    const auto ordinary = NativeName::from_posix("ordinary.txt");
+#endif
+    CK_CHECK(!names.error && names.state == DirectoryReadState::End && names.names.size() == 1);
+    if (names.names.size() == 1)
+        CK_CHECK(names.names.front() == *ordinary);
+    std::array<std::byte, 2> actual{};
+    read_all(*file, 0, actual);
+    CK_CHECK(actual == payload);
 }
 CK_TEST(index_file_native_uses_host_spelling_for_non_ascii_private_root) {
     const ck::testing::ScratchDirectory scratch("files-index-spelling", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
