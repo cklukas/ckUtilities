@@ -535,8 +535,10 @@ authority and does not close the application or release requirements below.
   The [worker payload qualification](ck-files-progress.md#2026-11-24--worker-owned-archive-payload)
   covers that checkpoint. The subsequent disk-backed path passed a large
   sparse round trip in Linux xterm, all 115 macOS Release entries, and 30
-  focused backend sanitizer entries. Windows runtime and APFS publication
-  remain open. See the [disk-backed capture qualification](ck-files-progress.md#2026-11-24--disk-backed-volume-archive-capture).
+  focused backend sanitizer entries. The matching Linux application suite
+  passed all 161 entries under ASan/UBSan and under ThreadSanitizer. Windows
+  runtime and APFS publication remain open. See the
+  [disk-backed capture qualification](ck-files-progress.md#2026-11-24--disk-backed-volume-archive-capture).
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates

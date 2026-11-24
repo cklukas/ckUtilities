@@ -14,6 +14,16 @@ ordinary-user Linux ARM64 ext4 xterm run captured 301,993,984 bytes into a
 source SHA-256. The app's peak resident memory was 16,945,152 bytes. A
 separate 4 MiB sparse ext4 round trip passed on the same executable.
 
+The same executable passed Linux xterm round trips in both directions
+between XFS and Btrfs, with exact hard-link groups, symlink payloads, and ACL
+and extended-attribute loss review. An unreadable source and a destination
+that ran out of blocks after approval produced no archive. Capture also
+refused before review when the profile volume lacked scratch space. Files
+reported the capture limit, released the scratch bytes, and left the
+destination and journal namespace untouched. Cancelling the large capture at
+review returned the occupied scratch capacity and preserved the source digest.
+Both the Files and backend guides rendered successfully with `ckdocs --strict`.
+
 The backend upgrade exposed a POSIX permanent-retirement regression. Two
 existing macOS tests caught an implementation that unlinked a pathname after
 checking identity. Backend `6291561` restored the typed refusal and requires
@@ -25,6 +35,17 @@ reviewed tree and sync checks. One earlier parallel parent-flush injection
 miss was recorded. The case passed four isolated repeats on both the
 unmodified backend and the patch and passed the final serial suite.
 
+The combined Linux application suite at `8da5d75` plus fixture commit
+`0e74753` passed all 161 Files, keymap, and shell entries under ASan/UBSan
+and again under ThreadSanitizer. Both independent installed ckVision
+consumers passed.
+The first attempt timed out under VM disk pressure and exposed a controller
+fixture missing its scratch location. The retry used the same backend and
+instrumented ckVision SDK, kept the test filesystem on a separate disk-backed
+ext4 volume, and kept the same deadlines. The guest held the build image in
+memory to remove loader contention. The matching macOS Release test rerun
+passed all 115 entries.
+
 Windows runtime qualification is postponed. Native APFS archive publication
 remains open.
 
@@ -35,6 +56,12 @@ remains open.
 | Linux ARM64 backend ASan/UBSan | `183c35432a819802cc515740e3bd3086a45c445fb5a03f74a14dbbdb0dd6fb6e` |
 | Large fixture xterm receipt | `39c6cd5ec22af32adfed1732db1cb07d174f2fdf533235726f367389735a1c49` |
 | Large fixture reconstruction and peak RSS | `e5ac5570ae9764bc69c0773e6dc9a54d30279925e66cca51d87fd92c53a74b41` |
+| Cross-filesystem and destination-failure matrix | `1f1880e09ec7a1c11966139eea24cad424f655d09e0b024920ec3270782adff1` |
+| Scratch-exhaustion xterm receipt | `db59a72f2b1561affa3ba12d0062ee82386061166a695a45360ca0c618be2486` |
+| Scratch-cancellation xterm receipt | `1a58c5de81656103d2568ac0716a7d38b28d4da804234ffab87af170390e52bb` |
+| Linux ARM64 combined ASan/UBSan | `c5d69ae8108fb44879e42447aba794b25a9eb9caed1f57acd66d48b85159397d` |
+| Linux ARM64 combined ThreadSanitizer | `ac5a44baca5c3a8bb54dc4f38a3bc54edaec8506d966002924128f86b4cd7251` |
+| macOS ARM64 fixture rerun | `a64a0412a0e442118b29dd2e63fe7d3f23b727d4b07a09e3c677873ed2189739` |
 
 ## 2026-11-24 — Worker-owned archive payload
 
