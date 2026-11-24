@@ -3528,9 +3528,17 @@ struct FilesApp::State {
         if (reply.state != FilesVolumeArchivePlanningState::Ready || !reply.review) {
             if (reply.error && report_read_only_archive_destination(*reply.error))
                 return;
+            if (reply.error && reply.error->state == ck::files::ObservationState::Denied) {
+                report_archive_error("Archive access denied. Check source and destination permissions.");
+                return;
+            }
             if (reply.error && (reply.error->error.operation == "volume_archive.source.entry_changed" ||
                                 reply.error->error.operation == "volume_archive.source.directory_changed")) {
                 report_archive_error("Archive source changed during capture. Start a new review.");
+                return;
+            }
+            if (reply.error && reply.error->error.operation == "volume_archive.source.version_unavailable") {
+                report_archive_error("Archive source change information is unavailable.");
                 return;
             }
             std::string message = reply.state == FilesVolumeArchivePlanningState::Cancelled
