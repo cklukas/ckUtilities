@@ -1,5 +1,29 @@
 # Files implementation evidence
 
+## 2026-11-24 — Native APFS archive source capture
+
+Frontend test `f55bfe7` exercised the live source adapter as an ordinary
+user on case-sensitive APFS with ownership enabled. The native descriptor
+reported two allocated ranges around a physical hole. The captured ranges
+matched it exactly, storing 81,920 bytes for an 8,388,608-byte file.
+Reconstruction matched every logical byte and the stored extent digest.
+The same capture retained a hard-link group and the exact symbolic-link
+target. Its review reported the resource fork, xattr, and ACL as separate
+losses on the file and required explicit consent. The adapter returned
+`Denied` for an unreadable file in that tree.
+
+The first probe found that writes extending the APFS fixture had allocated
+the whole gap. The final fixture punched a native hole, checked allocated
+blocks, and used the filesystem's reported boundaries as its control.
+The final macOS ARM64 Release run passed all 115 Files, keymap, and shell
+entries and the independent ckVision 2.1 SDK consumer. APFS publication
+and snapshot provider qualification remain open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release and focused APFS capture | `749ebb11eb10eb1f2d6a0a2d6fc9984723de2c443819326441539d08f4acfe26` |
+| Native allocated-range control before fixture correction | `488ac1dd39c4c4b14d19d0ad94dd42fc84db1dd23ae374bff69e17874e697c40` |
+
 ## 2026-11-24 — Complete archive recovery history
 
 Frontend `6a370d8` replaces the first-64-journal report with a list backed by

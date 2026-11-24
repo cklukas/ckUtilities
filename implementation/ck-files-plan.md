@@ -552,6 +552,9 @@ authority and does not close the application or release requirements below.
   The [archive history checkpoint](ck-files-progress.md#2026-11-24--complete-archive-recovery-history)
   shows all journals returned by the worker and exposes the recorded
   destination, including when many older records precede a blocking journal.
+  The [APFS source qualification](ck-files-progress.md#2026-11-24--native-apfs-archive-source-capture)
+  verifies live sparse capture, link representation, preservation-loss
+  reporting, and denied reads on case-sensitive APFS.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
