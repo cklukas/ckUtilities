@@ -2,9 +2,10 @@
 
 The WP-00 and WP-01 checkpoints are complete. WP-02 remains open.
 Files uses ckVision 2.1.0. Native Linux xterm checks cover Right-to-accept,
-pane-local volume browsing, read-only command availability, and a sparse
-archive round trip. A macOS PTY confirmed the read-only command behavior
-and the archive-publication refusal on a native APFS fixture. macOS desktop
+pane-local bookmarks and refresh recovery, volume browsing, read-only command
+availability, and a sparse archive round trip. A macOS PTY confirmed the
+read-only command behavior and the archive-publication refusal on a native APFS
+fixture. macOS desktop
 acceptance, safe APFS archive publication, and the Windows workstation tests
 remain open. Windows v143 qualification requires the `V:` development drive.
 The [implementation evidence](ck-files-progress.md) names the exact source
@@ -457,8 +458,11 @@ authority and does not close the application or release requirements below.
   passing Linux and macOS ThreadSanitizer and ASan/UBSan cohorts.
   A native macOS PTY confirmed Right-to-accept, row selection, Ctrl+R
   mark and focus retention, resize, and terminal restoration.
-  In Linux xterm a same-name replacement lost its mark and stayed blocked
-  through a second refresh until **Marks → Use current row** bound it.
+  The current Linux xterm build verified that a same-name replacement lost
+  its mark and stayed blocked through a second refresh. **Marks → Use
+  current row** bound the replacement. **Marks → Clear all marks** resolved
+  the remaining blocker before Copy could open review. The other pane kept
+  its mark. See the [current refresh qualification](ck-files-progress.md#2026-11-24--refresh-recovery-and-bookmark-persistence).
   The hosted Windows NTFS backend passed the native indexed mark-binding
   test, all 88 backend tests, and five installed SDK consumer tests.
   Windows runtime and desktop acceptance stay open.
@@ -493,8 +497,11 @@ authority and does not close the application or release requirements below.
   in both panes. Linux ARM64 candidate `ce4b02a` passes the matching Clang 19
   ASan/UBSan tests and the same PTY interactions. See the
   [race and native fixture evidence](evidence/ck-files-race-and-native-fixtures-20261111.json).
-  Current release sanitizer, full Windows runtime, and desktop acceptance
-  remain open.
+  The current Linux Release also persisted a pane-local bookmark across
+  close and relaunch in xterm. See the
+  [current settings qualification](ck-files-progress.md#2026-11-24--refresh-recovery-and-bookmark-persistence).
+  Current release sanitizer, full Windows runtime, and macOS desktop
+  acceptance remain open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
   The current Linux Release build passed xterm volume navigation and

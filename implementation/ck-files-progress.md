@@ -1,5 +1,39 @@
 # Files implementation evidence
 
+## 2026-11-24 — Refresh recovery and bookmark persistence
+
+Frontend `c789f30b61499f6355da143357ef07e4e553f18a` gives the refresh
+recovery command priority in the pane footer and tells the user how to
+resolve lost marks before Copy or Move. The macOS ARM64 Release suite
+passed all 113 Files test entries, including the rendered recovery command
+at 80 columns and the refreshed source and destination listings after Move.
+The test log SHA-256 is
+`afe914d6504d71321d4a41ab8da29626546835c35d4b17ac542fccd45da3f94d`.
+
+The Linux ARM64 Release executable was exercised as an ordinary user on
+native ext4 through a Debian xterm window. A newly inserted row reordered
+the listing while the mark and cursor followed their original file. Replacing
+that file with a different inode under the same name revoked both bindings.
+Another refresh preserved the revocation. **Use current row** resolved the
+cursor, and **Clear all marks** resolved the lost mark before Copy could
+open review. The opposite pane kept its mark. Cancelling Copy left the
+destination and journals unchanged.
+
+A separate run saved a left bookmark and quit. The settings file contained
+the exact native path. A fresh instance reopened it in the left pane. The
+right pane had no bookmark, and reopening the saved location left settings
+bytes unchanged. Both runs verified the executable path, single-instance
+behavior, clean exit, and restoration of terminal settings.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux ARM64 Release executable | `9803dbae7d8b8dd9ee9f13d07069e93cd28fe31220f524b161cbabd6bcfcb8a0` |
+| xterm refresh receipt | `ddcc03ad89515d1085c1aaa0973c88febf9442a72419aac4dce558232acf0c68` |
+| xterm bookmark receipt | `766f8a9316591d5cf7de136cfeb254261251a58b45ea7a17d94c101fd55f1080` |
+
+Windows workstation validation remains postponed. macOS desktop-window
+acceptance remains open.
+
 ## 2026-11-24 — Read-only file commands and native APFS refusal
 
 Frontend `578ef0c1ff6167943e93d43a511cb58c9823d623` uses the pane
