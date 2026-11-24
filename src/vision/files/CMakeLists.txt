@@ -71,7 +71,8 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
       upstream-oom-close post-link-flush service service-cancel service-legacy-root service-oom no-owner
       destination-moved-during-write destination-moved-at-publish source-mount-changed-during-write
       source-edited-during-capture source-directory-changed-during-capture
-      recovery-root-replaced recovery-journal-appeared-during-review)
+      recovery-root-replaced recovery-journal-appeared-during-review
+      crash-write crash-before-link crash-after-link crash-after-commit)
     add_test(NAME ck_files_archive_native_${archive_case} COMMAND ${Python3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_volume_archive_native.py
       $<TARGET_FILE:ck_vision_archive_native_tests> ${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT} 40 ${archive_case})

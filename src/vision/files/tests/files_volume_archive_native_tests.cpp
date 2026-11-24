@@ -10,10 +10,13 @@
 #include <atomic>
 #include <cassert>
 #include <cerrno>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <filesystem>
+#include <iterator>
 #include <new>
 #include <semaphore>
 #include <sys/stat.h>
@@ -26,6 +29,12 @@ const char* mode="roundtrip";bool armed=false,known=false,write_seen=false,close
 dev_t stage_dev=0;ino_t stage_ino=0;int closed=0,reused=-1;std::stop_source* cancel_source=nullptr;
 std::string base_path;bool stage(int fd){struct stat s{};return known&&fstat(fd,&s)==0&&s.st_dev==stage_dev&&s.st_ino==stage_ino;}
 bool is(const char* text){return !std::strcmp(mode,text);}
+[[noreturn]] void interrupt_archive_process() {
+    std::fprintf(stderr, "Interrupting archive at %s\n", mode);
+    assert(std::fflush(stderr) == 0);
+    assert(kill(getpid(), SIGKILL) == 0);
+    std::abort();
+}
 std::binary_semaphore progress_entered(0), progress_continue(0);
 bool verify_seen = false;
 bool destination_moved = false;
@@ -93,6 +102,8 @@ extern "C" int __wrap_ftruncate(int fd,off_t n){if(armed){struct stat s{};assert
 extern "C" ssize_t __wrap_pwrite(int fd,const void* data,size_t n,off_t at){
  const auto r=__real_pwrite(fd,data,n,at);
  if(armed&&stage(fd)&&!write_seen){write_seen=true;
+  if (is("crash-write") && r > 0)
+      interrupt_archive_process();
   if (is("service") || is("service-cancel")) {
       progress_entered.release();
       assert(progress_continue.try_acquire_for(std::chrono::seconds(10)));
@@ -112,6 +123,8 @@ extern "C" int __wrap_fsync(int fd){
 }
 extern "C" int __real_close(int);
 extern "C" int __wrap_close(int fd){const bool target=armed&&stage(fd);if(target)++closed;const int r=__real_close(fd);
+ if (target && linked && is("crash-after-commit") && r == 0)
+     interrupt_archive_process();
  if(target&&!close_fault&&(is("close-oom")||is("first-enospc-close-oom")||is("upstream-oom-close")||is("cancel-close")||is("cancel-close-oom"))){
   assert(r==0);close_fault=true;reused=open("/dev/null",O_RDONLY|O_CLOEXEC);assert(reused==fd);
   if(!is("cancel-close"))deny_alloc=true;
@@ -119,9 +132,15 @@ extern "C" int __wrap_close(int fd){const bool target=armed&&stage(fd);if(target
  return r;}
 extern "C" int __real_linkat(int,const char*,int,const char*,int);
 extern "C" int __wrap_linkat(int a,const char* b,int c,const char* d,int e){
+ const bool archive_link = armed && std::strcmp(d, "image.ckarchive") == 0;
+ if (archive_link && is("crash-before-link"))
+     interrupt_archive_process();
  if (armed && is("destination-moved-at-publish") && !destination_moved && !std::strcmp(d, "image.ckarchive"))
      replace_destination();
- const int r=__real_linkat(a,b,c,d,e);if(armed&&r==0){linked=true;if(is("cancel-after-publish")){assert(cancel_source);cancel_source->request_stop();}}return r;}
+ const int r=__real_linkat(a,b,c,d,e);if(armed&&r==0){linked=true;
+  if (archive_link && is("crash-after-link"))
+      interrupt_archive_process();
+  if(is("cancel-after-publish")){assert(cancel_source);cancel_source->request_stop();}}return r;}
 namespace {
 template<class T>T take(Observation<T> r){if(!r.value()){std::fprintf(stderr,"unavailable %d/%lld %s\n",int(r.state()),(long long)r.unavailable_detail()->error.code,r.unavailable_detail()->error.operation.c_str());std::abort();}return std::move(r).take_value();}
 NativeName name(const char* s){return *NativeName::from_posix(s);}NativeAbsolutePath address(const std::string& s){return take(NativeAbsolutePath::from_posix(s));}
@@ -132,10 +151,11 @@ FilesVolumeArchiveDocument document(){FilesVolumeArchiveDocument d;d.source=sour
 std::string journal(){return ".ck-volume-archive-01000000000000000000000000000000";}
 std::vector<std::byte> read_file(const std::string& path){int fd=open(path.c_str(),O_RDONLY|O_CLOEXEC);assert(fd>=0);struct stat s{};assert(fstat(fd,&s)==0);std::vector<std::byte> data(static_cast<std::size_t>(s.st_size));assert(pread(fd,data.data(),data.size(),0)==static_cast<ssize_t>(data.size()));assert(close(fd)==0);return data;}
 std::uint64_t little(const std::vector<std::byte>& b,std::size_t at,unsigned n){assert(at+n<=b.size());std::uint64_t v=0;for(unsigned i=0;i<n;++i)v|=std::uint64_t(std::to_integer<unsigned char>(b[at+i]))<<(8*i);return v;}
-void verify_archive(const std::string& path,OperationJournalState expected_state=OperationJournalState::Complete){auto b=read_file(path);assert(b.size()>56&&!memcmp(b.data(),"CKARV01\0",8)&&little(b,8,4)==2);const auto data=little(b,24,8);assert(data==56+little(b,16,8)&&little(b,32,8)==2*1024*1024&&little(b,40,8)==2&&b.size()==data+2*1024*1024);
+void verify_archive(const std::string& path,OperationJournalState expected_state=OperationJournalState::Complete,
+                    const std::string& journal_leaf=journal()){auto b=read_file(path);assert(b.size()>56&&!memcmp(b.data(),"CKARV01\0",8)&&little(b,8,4)==2);const auto data=little(b,24,8);assert(data==56+little(b,16,8)&&little(b,32,8)==2*1024*1024&&little(b,40,8)==2&&b.size()==data+2*1024*1024);
  assert(!memcmp(b.data()+data,"DATA",4)&&!memcmp(b.data()+b.size()-4,"TAIL",4));for(std::size_t i=data+4;i+4<b.size();++i)assert(b[i]==std::byte{});
  struct stat s{};assert(stat(path.c_str(),&s)==0&&s.st_blocks*512<s.st_size/4);
- auto journal_bytes=read_file(base_path+"/private/"+journal());auto decoded=take(decode_operation_journal(journal_bytes));assert(!decoded.tail);
+ auto journal_bytes=read_file(base_path+"/private/"+journal_leaf);auto decoded=take(decode_operation_journal(journal_bytes));assert(!decoded.tail);
  auto recovery=take(inspect_volume_archive_recovery(*decoded.journal));assert(recovery.evidence.staging_namespace==StagingNamespace::Anonymous&&!recovery.evidence.staging_component&&!recovery.evidence.staging_encoding&&recovery.evidence.staging_native_path.empty());
  Sha256 hash;hash.update(b);assert(recovery.evidence.staging_digest&&*recovery.evidence.staging_digest==hash.digest()&&recovery.evidence.archive_logical_size==b.size());
  assert(decoded.journal->state(0)==expected_state);
@@ -252,9 +272,142 @@ void reviewed_write_refuses_changed_admission() {
     }
 
 }
+
+bool archive_crash_case() {
+    return is("crash-write") || is("crash-before-link") ||
+           is("crash-after-link") || is("crash-after-commit");
 }
 
-int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_path=argv[1];
+auto await_archive_reply(auto receive) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    do {
+        if (auto reply = receive())
+            return std::move(*reply);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    } while (std::chrono::steady_clock::now() < deadline);
+    std::fprintf(stderr, "Timed out waiting for archive worker in %s\n", mode);
+    std::abort();
+}
+
+FilesVolumeArchiveReply execute_crash_fixture_archive(const char *archive_name, bool interrupt) {
+    const auto source_path = address(base_path + "/source");
+    const auto scratch = address(base_path + "/scratch");
+    NativeFileSystem filesystem;
+    const auto directory = take(filesystem.open_native_directory(source_path));
+    const auto metadata = take(directory->inspect_basic());
+    assert(metadata.identity.value() && metadata.mount_id.value());
+    auto selected = source();
+    selected.mount_point = base_path + "/source";
+    selected.archive.root = {*metadata.identity.value(), *metadata.mount_id.value()};
+    FilesVolumeArchiveService worker;
+    const auto planned = worker.plan({
+        selected, address(base_path + "/dest"), archive_name, FilesVolumeArchiveConsistency::Live,
+        [selected, scratch](std::stop_token stop) {
+            return capture_native_volume_archive_source(selected, scratch, FilesVolumeArchiveConsistency::Live, stop);
+        }});
+    assert(planned.state == FilesVolumeArchivePlanningSubmission::Accepted);
+    const auto reply = await_archive_reply([&] { return worker.take_plan(); });
+    assert(reply.state == FilesVolumeArchivePlanningState::Ready && reply.review);
+    const auto losses = reply.review->losses().size();
+    auto approval = take(reply.review->approve(losses ? FilesVolumeArchiveReviewDecision::ContinueWithListedLosses
+                                                    : FilesVolumeArchiveReviewDecision::Proceed,
+                                             std::vector<bool>(losses, true)));
+    armed = interrupt;
+    const auto submitted = worker.execute_review(planned.ticket, std::move(approval), address(base_path + "/private"));
+    assert(submitted.state == FilesVolumeArchiveSubmission::Accepted);
+    return await_archive_reply([&] { return worker.take(); });
+}
+
+void create_crash_fixture_source() {
+    assert(mkdir((base_path + "/source").c_str(), 0700) == 0);
+    assert(mkdir((base_path + "/scratch").c_str(), 0700) == 0);
+    const int content = open((base_path + "/source/sparse.bin").c_str(),
+                             O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600);
+    assert(content >= 0 && pwrite(content, "DATA", 4, 0) == 4 &&
+           pwrite(content, "TAIL", 4, 2 * 1024 * 1024 - 4) == 4 && fsync(content) == 0 && close(content) == 0);
+}
+
+void inspect_after_archive_crash() {
+    using State = OperationJournalState;
+    using Action = OperationRecoveryAction;
+    const auto state = is("crash-write") ? State::Prepared
+                     : is("crash-after-commit") ? State::DestinationCommitted : State::CommitIntended;
+    const auto action = state == State::Prepared ? Action::InspectUnpublishedStaging
+                      : state == State::DestinationCommitted ? Action::VerifyDestination
+                      : Action::InspectAmbiguousPublication;
+    const bool published = is("crash-after-link") || is("crash-after-commit");
+    const auto source_path = base_path + "/source/sparse.bin";
+    const auto destination = base_path + "/dest";
+    const auto output = destination + "/image.ckarchive";
+    const auto private_path = base_path + "/private";
+    const auto journal_file = std::filesystem::directory_iterator(private_path);
+    assert(journal_file != std::filesystem::directory_iterator{});
+    const auto journal_path = journal_file->path();
+    struct stat journal_before{}, archive_before{};
+    assert(stat(journal_path.c_str(), &journal_before) == 0);
+    if (published)
+        assert(stat(output.c_str(), &archive_before) == 0);
+    const auto initial_journal = read_file(journal_path.string());
+    const auto original = read_file(source_path);
+    std::vector<std::byte> expected(2 * 1024 * 1024);
+    std::memcpy(expected.data(), "DATA", 4);
+    std::memcpy(expected.data() + expected.size() - 4, "TAIL", 4);
+    assert(original == expected);
+    assert(std::filesystem::is_empty(base_path + "/scratch"));
+    auto directory_size = [](const std::string &path) {
+        return std::distance(std::filesystem::directory_iterator(path), std::filesystem::directory_iterator{});
+    };
+    assert(directory_size(private_path) == 1 && directory_size(destination) == (published ? 1 : 0));
+    const auto output_before = published ? read_file(output) : std::vector<std::byte>{};
+
+    FilesVolumeArchiveRecoveryService recovery;
+    assert(recovery.request(address(private_path)) == FilesVolumeArchiveRecoverySubmission::Accepted);
+    const auto result = await_archive_reply([&] { return recovery.take(); });
+    recovery.request_stop();
+    recovery.join();
+    assert(result.state == FilesVolumeArchiveRecoveryState::Ready && result.scan &&
+           result.scan->requires_reconciliation && result.scan->journals.size() == 1);
+    const auto &journal_item = result.scan->journals.front();
+    assert(journal_item.native_name == name(journal_path.filename().c_str()));
+    assert(journal_item.report && !journal_item.error);
+    const auto &report = *journal_item.report;
+    assert(report.evidence.archive_name == "image.ckarchive" &&
+           report.evidence.staging_namespace == StagingNamespace::Anonymous &&
+           !report.evidence.staging_component &&
+           report.evidence.staging_digest.has_value() == (state != State::Prepared));
+    assert(report.operation.requires_reconciliation && !report.operation.has_untrusted_tail &&
+           report.operation.items.size() == 1);
+    const auto &item = report.operation.items.front();
+    assert(item.state == state && item.action == action && item.requires_reconciliation);
+    if (published)
+        verify_archive(output, state, journal_path.filename().string());
+
+    // A different archive name avoids a publication conflict masking the
+    // startup recovery gate on a subsequent reviewed Copy.
+    const auto retry = execute_crash_fixture_archive("retry.ckarchive", false);
+    assert(retry.state == FilesVolumeArchiveState::Failed && !retry.result && retry.error &&
+           retry.error->error.operation == "volume_archive.recovery_admission_required");
+    struct stat journal_after{}, archive_after{};
+    assert(stat(journal_path.c_str(), &journal_after) == 0 &&
+           journal_before.st_dev == journal_after.st_dev && journal_before.st_ino == journal_after.st_ino);
+    assert(read_file(journal_path.string()) == initial_journal && directory_size(private_path) == 1);
+    assert(directory_size(destination) == (published ? 1 : 0));
+    if (published) {
+        assert(stat(output.c_str(), &archive_after) == 0 &&
+               archive_before.st_dev == archive_after.st_dev && archive_before.st_ino == archive_after.st_ino);
+        assert(read_file(output) == output_before);
+    }
+    assert(read_file(source_path) == original && std::filesystem::is_empty(base_path + "/scratch"));
+    std::printf("Restarted archive %s PASS published=%d state=%d\n", mode, published, static_cast<int>(state));
+}
+}
+
+int main(int argc,char** argv){assert((argc==3||argc==4)&&getuid()!=0);mode=argv[2];base_path=argv[1];
+ if (argc == 4) {
+    assert(archive_crash_case() && std::strcmp(argv[3], "inspect") == 0);
+    inspect_after_archive_crash();
+    return 0;
+ }
  if (is("source-edited-during-capture") || is("source-directory-changed-during-capture")) {
     live_capture_refuses_observed_change(is("source-directory-changed-during-capture"));
     return 0;
@@ -262,6 +415,13 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
  assert(mkdir((base_path+"/dest").c_str(),0700)==0&&mkdir((base_path+"/private").c_str(),0700)==0);
  // Caller durably provisions the private Root namespace before acquisition.
  int parent=open(base_path.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);assert(parent>=0&&fsync(parent)==0&&close(parent)==0);
+ if (archive_crash_case()) {
+    create_crash_fixture_source();
+    const auto result = execute_crash_fixture_archive("image.ckarchive", true);
+    std::fprintf(stderr, "Writer returned %d before crash boundary%s%s\n", static_cast<int>(result.state),
+                 result.error ? " at " : "", result.error ? result.error->error.operation.c_str() : "");
+    return 2;
+ }
  NativeFileSystem fs;auto dest=std::shared_ptr<const DirectoryCursor>(take(fs.open_native_directory(address(base_path+"/dest"))));auto root=take(acquire_native_journal_root(address(base_path+"/private")));
  if(is("no-owner")){FilesVolumeArchiveWriteRequest request{document(),base_path+"/nonexistent","image.ckarchive",1,{},{},{},{},{},{},{}};unsigned callbacks=0;request.append_journal=[&](auto){++callbacks;return Observation<bool>::available(true);};auto result=write_volume_archive(request);assert(!result.value()&&result.state()==ObservationState::Unsupported&&callbacks==0);dest.reset();take(root->finish_io());return 0;}
  if(is("occupied")){int fd=open((base_path+"/dest/image.ckarchive").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
