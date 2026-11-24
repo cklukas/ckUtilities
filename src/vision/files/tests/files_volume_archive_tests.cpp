@@ -1062,6 +1062,7 @@ CK_TEST(volume_archive_recovery_preserves_long_native_paths_and_bounds_fields) {
             CK_CHECK(recovered.value()->evidence.source_mount_point == mount);
             CK_CHECK(recovered.value()->evidence.destination_encoding == path.encoding());
             CK_CHECK(recovered.value()->evidence.destination_native_path == expected_bytes);
+            CK_CHECK(recovered.value()->evidence.display_destination_folder() == path.display_text());
         }
     }
 

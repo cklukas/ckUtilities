@@ -75,6 +75,42 @@ std::array<std::byte, 32> digest_bytes(std::span<const std::byte> bytes) {
     return digest.digest();
 }
 
+void add_cancelled_archive_journal(const NativeAbsolutePath &root, unsigned index) {
+    constexpr std::string_view hex = "0123456789abcdef";
+    const std::uint64_t transaction = std::uint64_t{64} + index;
+    OperationJournalId id;
+    std::string spelling = ".ck-volume-archive-";
+    for (std::size_t i = 0; i < id.bytes.size(); ++i) {
+        const auto byte = i < sizeof(transaction) ? (transaction >> (i * 8U)) & 0xffU : 0U;
+        id.bytes[i] = static_cast<std::byte>(byte);
+        spelling += hex[byte >> 4U];
+        spelling += hex[byte & 0xfU];
+    }
+#if defined(_WIN32)
+    const auto name = NativeName::from_windows(std::u16string(spelling.begin(), spelling.end()));
+#else
+    const auto name = NativeName::from_posix(spelling);
+#endif
+    auto journal = OperationJournal::create(FileOperation::Copy, id);
+    if (!name || !journal.value())
+        throw std::runtime_error("cannot build archive history fixture");
+    std::vector<std::byte> evidence;
+    append_little_endian<std::uint64_t>(evidence, transaction);
+    append_length_string(evidence, "fixture-volume");
+    append_length_string(evidence, "/fixture");
+    append_length_string(evidence, "history-" + std::to_string(index) + ".ckarchive");
+    if (!(*journal.value())->append({1, 0, OperationJournalState::Planned, evidence}).value() ||
+        !(*journal.value())->append({2, 0, OperationJournalState::Cancelled, evidence}).value())
+        throw std::runtime_error("cannot record cancelled archive fixture");
+    const auto encoded = encode_operation_journal(**journal.value());
+    auto file = open_native_operation_journal_file(root, *name, true);
+    if (!encoded.value() || !file.value())
+        throw std::runtime_error("cannot open archive history journal");
+    const auto written = (*file.value())->write_at(0, *encoded.value());
+    if (!written.value() || *written.value() != encoded.value()->size() || !(*file.value())->finish_io().value())
+        throw std::runtime_error("cannot save archive history journal");
+}
+
 template <class T> void find_views(ckv::ui::View &root, std::vector<T *> &found) {
     if (auto *view = dynamic_cast<T *>(&root))
         found.push_back(view);
@@ -213,7 +249,7 @@ struct Fixture {
                      bool operation_recovery_journal = false, bool eligible_archive_recovery = false,
                      bool eligible_operation_recovery = false,
                      std::function<Observation<std::shared_ptr<IndexFileFactory>>()> completion_workspace = {},
-                     FilesVolumeEnumerator enumerate_volumes = {})
+                     FilesVolumeEnumerator enumerate_volumes = {}, unsigned cancelled_archive_journals = 0)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -310,6 +346,8 @@ struct Fixture {
         auto prepared_journal_root = prepare_native_operation_journal_root(operation_root_address);
         if (!prepared_journal_root.value())
             throw std::runtime_error("cannot prepare app operation journal root");
+        for (unsigned index = 0; index < cancelled_archive_journals; ++index)
+            add_cancelled_archive_journal(operation_root_address, index);
         if (eligible_archive_recovery) {
             const auto destination = scratch.path() / "archive-destination";
             std::filesystem::create_directory(destination);
@@ -2751,7 +2789,12 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.command("ck.files.inspect_archive_recovery"));
     f.until([&] { return f.painted().find("Archive recovery review") != std::string::npos; });
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);
+    CK_CHECK(f.painted().find("[Journal error]") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return f.painted().find("Archive recovery details") != std::string::npos; });
     CK_CHECK(f.painted().find("Inspection error:") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Archive recovery details") == std::string::npos; });
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
 }
@@ -3073,10 +3116,42 @@ CK_TEST(files_app_archive_cleanup_requires_live_creator_ownership) {
     CK_CHECK(!f.command("ck.files.cleanup_archive_recovery"));
     CK_CHECK(f.command("ck.files.inspect_archive_recovery"));
     f.until([&] { return f.painted().find("Archive recovery review") != std::string::npos; });
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return f.painted().find("Archive recovery details") != std::string::npos; });
     const auto review = f.painted();
     CK_CHECK(review.find("Archive: fixture.ckarchive") != std::string::npos);
     CK_CHECK(review.find("State: copied") != std::string::npos);
     CK_CHECK(review.find("Action: inspect unpublished staging") != std::string::npos);
+    CK_CHECK(review.find("Recorded destination folder:") != std::string::npos);
+    CK_CHECK(review.find("archive-destination") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Archive recovery details") == std::string::npos; });
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
+}
+
+CK_TEST(files_app_archive_recovery_prioritizes_attention_and_can_open_every_journal) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {100, 25}, {}, false, false, false, {}, false, false,
+              false, true, false, {}, {}, 69);
+    f.loaded();
+    f.until([&] { return f.app->availability("ck.files.inspect_archive_recovery").enabled; });
+    CK_CHECK(f.command("ck.files.inspect_archive_recovery"));
+    f.until([&] { return f.painted().find("Journals: 70 | Need review: 1") != std::string::npos; });
+    CK_CHECK(f.painted().find("[Review] fixture.ckarchive") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return f.painted().find("State: copied") != std::string::npos; });
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Archive recovery details") == std::string::npos; });
+    auto *const selection = dynamic_cast<ckv::widgets::ListView *>(f.application.focused());
+    CK_CHECK(selection);
+    CK_CHECK(f.key(ckv::Key::End));
+    CK_CHECK(selection && selection->cursor() == 69);
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return f.painted().find("State: cancelled") != std::string::npos; });
+    CK_CHECK(f.painted().find("Archive: history-") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Archive recovery details") == std::string::npos; });
+    CK_CHECK(selection && selection->cursor() == 69);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
 }

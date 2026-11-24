@@ -11,12 +11,14 @@
 #include <cvision/ui/layout.hpp>
 #include <cvision/widgets/command_palette.hpp>
 #include <cvision/widgets/dialog.hpp>
+#include <cvision/widgets/list_view.hpp>
 #include <cvision/widgets/mnemonic.hpp>
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
 #include <cerrno>
 #include <iomanip>
+#include <numeric>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -166,6 +168,70 @@ const char *archive_recovery_state(ck::files::OperationJournalState state) noexc
     }
     return "unknown state";
 }
+
+class ArchiveRecoveryList final : public ckv::widgets::ListModel {
+  public:
+    explicit ArchiveRecoveryList(std::shared_ptr<const FilesVolumeArchiveRecoveryScan> scan)
+        : scan_(std::move(scan)), order_(scan_->journals.size()) {
+        std::iota(order_.begin(), order_.end(), std::size_t{0});
+        const auto terminal = std::stable_partition(order_.begin(), order_.end(), [this](std::size_t index) {
+            const auto &journal = scan_->journals[index];
+            return !journal.report || journal.report->operation.requires_reconciliation;
+        });
+        review_count_ = static_cast<std::size_t>(terminal - order_.begin());
+    }
+    std::size_t item_count() const override { return order_.size(); }
+    std::size_t review_count() const { return review_count_; }
+    std::optional<std::size_t> index_of(ckv::widgets::ListItemId id) const override {
+        return id > 0 && id <= item_count() ? std::optional<std::size_t>(id - 1) : std::nullopt;
+    }
+    ckv::widgets::ListItem item_at(std::size_t index) const override {
+        const auto &journal = item(index);
+        if (!journal.report)
+            return {index + 1, "[Journal error] " + journal.display_name};
+        const auto &operation = journal.report->operation;
+        const auto state = operation.requires_reconciliation ? "Review" :
+            archive_recovery_state(operation.items.front().state);
+        const std::string_view name = journal.report->evidence.archive_name;
+        constexpr std::size_t max_label_bytes = 256;
+        return {index + 1, std::string("[") + state + "] " +
+            ck::files::display_native_text(name.substr(0, max_label_bytes)) +
+            (name.size() > max_label_bytes ? "..." : "")};
+    }
+    std::string details(std::size_t index) const {
+        const auto &journal = item(index);
+        std::ostringstream text;
+        text << "Journal: " << journal.display_name << '\n';
+        if (!journal.report) {
+            if (journal.error)
+                text << "Inspection error: " << ck::files::display_native_text(journal.error->error.operation) << '\n';
+            return text.str();
+        }
+        const auto &report = *journal.report;
+        for (const auto &recovery : report.operation.items)
+            text << "State: " << archive_recovery_state(recovery.state)
+                 << "\nAction: " << archive_recovery_action(recovery.action) << '\n';
+        if (report.operation.has_untrusted_tail)
+            text << "Journal tail: untrusted\n";
+        text << "Archive: " << ck::files::display_native_text(report.evidence.archive_name) << '\n'
+             << "Transaction: " << report.evidence.transaction_id << '\n'
+             << "Recorded source: " << ck::files::display_native_text(report.evidence.source_mount_point) << '\n';
+        if (const auto destination = report.evidence.display_destination_folder())
+            text << "Recorded destination folder: " << *destination << '\n';
+        else
+            text << "Recorded destination folder unavailable\n";
+        return text.str();
+    }
+
+  private:
+    const FilesVolumeArchiveRecoveryItem &item(std::size_t index) const {
+        return scan_->journals[order_[index]];
+    }
+    std::shared_ptr<const FilesVolumeArchiveRecoveryScan> scan_;
+    std::vector<std::size_t> order_;
+    std::size_t review_count_ = 0;
+};
+
 std::optional<std::string> preview_utf8(const FilesPanePreview &preview) {
     std::string text;
     if (preview.bytes.empty())
@@ -407,7 +473,7 @@ struct FilesApp::State {
     bool volume_archive_planning_cancelling = false;
     std::optional<FilesVolumeArchiveTicket> volume_archive_execution_request;
     bool volume_archive_recovery_request = false;
-    std::optional<FilesVolumeArchiveRecoveryScan> volume_archive_recovery_scan;
+    std::shared_ptr<const FilesVolumeArchiveRecoveryScan> volume_archive_recovery_scan;
     std::string volume_archive_recovery_error;
     bool volume_archive_recovery_cleanup_request = false;
     std::string volume_archive_recovery_cleanup_error;
@@ -1661,45 +1727,46 @@ struct FilesApp::State {
         if (!availability("ck.files.inspect_archive_recovery").enabled ||
             !volume_archive_recovery_scan || modal_pending())
             return;
-        std::ostringstream summary;
-        summary << "Read-only inspection\n\n";
-        constexpr std::size_t max_items = 64;
-        constexpr std::size_t max_source_label_bytes = 512;
-        const auto &journals = volume_archive_recovery_scan->journals;
-        const auto count = std::min(max_items, journals.size());
-        for (std::size_t index = 0; index != count; ++index) {
-            const auto &item = journals[index];
-            summary << "Journal: " << item.display_name << '\n';
-            if (item.report) {
-                const auto &report = *item.report;
-                const std::string_view source = report.evidence.source_mount_point;
-                summary << "Source: " << ck::files::display_native_text(source.substr(0, max_source_label_bytes))
-                        << (source.size() > max_source_label_bytes ? "..." : "") << '\n'
-                        << "Archive: " << ck::files::display_native_text(report.evidence.archive_name) << '\n'
-                        << "Transaction: " << report.evidence.transaction_id << '\n';
-                if (report.evidence.destination_encoding) {
-                    summary << "Destination: exact native path recorded ("
-                            << (*report.evidence.destination_encoding == ck::files::NameEncoding::PosixBytes
-                                    ? "POSIX bytes" : "Windows UTF-16")
-                            << ")\n";
-                } else {
-                    summary << "Destination: not recorded in this legacy journal\n";
-                }
-                for (const auto &recovery : report.operation.items)
-                    summary << "State: " << archive_recovery_state(recovery.state)
-                            << "\nAction: " << archive_recovery_action(recovery.action) << '\n';
-                if (report.operation.has_untrusted_tail)
-                    summary << "Journal tail: untrusted\n";
-            } else if (item.error) {
-                summary << "Inspection error: " << item.error->error.operation << '\n';
-            }
-            summary << '\n';
-        }
-        if (journals.size() > count)
-            summary << "Additional journal entries omitted from this bounded view: "
-                    << (journals.size() - count) << '\n';
-        archive_recovery_window = present_files_read_only_text("Archive recovery review", summary.str(),
-            application, shell->desktop(), shell->roles());
+        using namespace ckv::widgets;
+        auto model = std::make_shared<ArchiveRecoveryList>(volume_archive_recovery_scan);
+        auto owner = std::make_unique<Window>("Archive recovery review");
+        auto &desktop = shell->desktop();
+        const auto &roles = shell->roles();
+        const auto area = desktop.content_area();
+        const int width = std::min(90, area.width), height = std::min(22, area.height);
+        owner->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height});
+        owner->set_min_size({24, 6});
+        owner->set_resizable(true);
+        owner->set_content_margin(1, 1);
+        owner->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame, roles.dialog_background);
+        auto content = std::make_unique<ckv::ui::Column>();
+        content->add_item(std::make_unique<Label>(
+            "Read-only inspection | Journals: " + std::to_string(model->item_count()) +
+            " | Need review: " + std::to_string(model->review_count())));
+        auto list = std::make_unique<ListView>();
+        auto *const selection = list.get();
+        list->set_model(*model);
+        list->on_activate = [this, model](std::size_t index) {
+            if (index < model->item_count())
+                present_files_read_only_text("Archive recovery details", model->details(index),
+                    application, shell->desktop(), shell->roles());
+        };
+        content->add_item(std::move(list), {.policy = ckv::ui::SizePolicy::Expanding});
+        auto buttons = std::make_unique<ckv::ui::Row>();
+        buttons->set_spacing(1);
+        auto inspect = std::make_unique<Button>("&Details");
+        inspect->on_press = [selection] {
+            if (const auto index = selection->cursor(); index >= 0)
+                selection->on_activate(static_cast<std::size_t>(index));
+        };
+        buttons->add_item(std::move(inspect));
+        auto dismiss = std::make_unique<Button>("&Close");
+        owner->cancel_request = [view = owner.get()] { view->close(); };
+        dismiss->on_press = owner->cancel_request;
+        buttons->add_item(std::move(dismiss));
+        content->add_item(std::move(buttons));
+        owner->set_content(std::move(content));
+        archive_recovery_window = desktop.present_modal(WindowHandle{std::move(owner), selection}, application);
         if (archive_recovery_window) {
             archive_recovery_lifetime = archive_recovery_window->lifetime_token();
             archive_recovery_window->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
@@ -4117,7 +4184,8 @@ struct FilesApp::State {
                 if (auto reply = volume_archive_recovery_service->take()) {
                     volume_archive_recovery_request = false;
                     if (reply->state == FilesVolumeArchiveRecoveryState::Ready && reply->scan) {
-                        volume_archive_recovery_scan = std::move(reply->scan);
+                        volume_archive_recovery_scan = std::make_shared<const FilesVolumeArchiveRecoveryScan>(
+                            std::move(*reply->scan));
                         volume_archive_recovery_error.clear();
                     } else {
                         volume_archive_recovery_scan.reset();
@@ -4420,7 +4488,8 @@ struct FilesApp::State {
             return;
         }
         if (archive_recovery_open()) {
-            archive_recovery_window->close();
+            if (auto *active_window = shell->desktop().active_window())
+                active_window->close();
             return;
         }
         if (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) {

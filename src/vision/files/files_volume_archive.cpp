@@ -706,6 +706,15 @@ std::optional<ck::files::NativeName> archive_staging_name(const ck::files::Nativ
 
 } // namespace
 
+std::optional<std::string> FilesVolumeArchiveJournalEvidence::display_destination_folder() const {
+    if (!destination_encoding)
+        return std::nullopt;
+    const auto path = decode_native_absolute_path(*destination_encoding, destination_native_path);
+    if (!path.value())
+        return std::nullopt;
+    return path.value()->display_text();
+}
+
 Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
     const ck::files::OperationJournal &journal, std::optional<UnavailableObservation> tail) {
     if (journal.operation() != ck::files::FileOperation::Copy)

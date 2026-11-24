@@ -320,6 +320,8 @@ struct FilesVolumeArchiveJournalEvidence final {
     ck::files::StagingNamespace staging_namespace=ck::files::StagingNamespace::Unknown;
     std::optional<ck::files::NativeName> staging_component;
     std::optional<std::uint64_t> archive_logical_size;
+    // Presentation only. The recorded route does not authorize opening it.
+    std::optional<std::string> display_destination_folder() const;
     friend bool operator==(const FilesVolumeArchiveJournalEvidence &,
                            const FilesVolumeArchiveJournalEvidence &) = default;
 };
