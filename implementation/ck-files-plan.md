@@ -5,9 +5,10 @@ Files uses ckVision 2.1.0. Native Linux xterm checks cover Right-to-accept,
 pane-local bookmarks and refresh recovery, volume browsing, read-only command
 availability, and a sparse archive round trip. A macOS PTY confirmed the
 read-only command behavior and the archive-publication refusal on a native APFS
-fixture. macOS desktop
-acceptance, safe APFS archive publication, and the Windows workstation tests
-remain open. Windows v143 qualification requires the `V:` development drive.
+fixture. A real macOS terminal window verified two-pane navigation,
+Right-to-accept, previews, and volume navigation. Safe APFS archive publication
+and the Windows workstation tests remain open. Windows v143 qualification
+requires the `V:` development drive.
 The [implementation evidence](ck-files-progress.md) names the exact source
 revisions and the scope of each native and sanitizer run.
 
@@ -52,9 +53,9 @@ concurrent external writer; state the precise guarantees and verified limits.
 
 ## Baseline and source evidence
 
-The latest published ckVision release checked on this date is
-[v1.4.2](https://github.com/cklukas/ckVision/releases/tag/v1.4.2), released on
-2026-11-02. The tag resolves to commit
+The 2026-11-02 baseline used
+[ckVision v1.4.2](https://github.com/cklukas/ckVision/releases/tag/v1.4.2).
+The tag resolves to commit
 `7ad5bd67553414e7dc0882069482864034cb31f9` (verified with `git ls-remote`).
 At initial review, ckUtilities required 1.3.0 and recorded revision
 `57b379d0dddd6a3b517b614a4eb2d1a1c99b474b` in
@@ -465,7 +466,7 @@ authority and does not close the application or release requirements below.
   its mark. See the [current refresh qualification](ck-files-progress.md#2026-11-24--refresh-recovery-and-bookmark-persistence).
   The hosted Windows NTFS backend passed the native indexed mark-binding
   test, all 88 backend tests, and five installed SDK consumer tests.
-  Windows runtime and desktop acceptance stay open.
+  Windows runtime and desktop-window acceptance stay open.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no
@@ -478,7 +479,7 @@ authority and does not close the application or release requirements below.
   consumers. The macOS PTY run verifies completion feedback, Right-to-accept,
   Enter navigation, mouse marking in both panes, and mark retention on resize.
   See [source-bound evidence](evidence/ck-files-9635373-linux-and-pty-20261110.json).
-  Windows and desktop-window acceptance remain open.
+  Windows runtime and desktop-window acceptance remain open.
   Direct Store save preflight also passes current Mac normal/TSan 109/109,
   including an allocation-fault regression that fails against the old writer.
   See `evidence/ck-files-settings-save-preflight-20261110.json`; this later
@@ -500,8 +501,8 @@ authority and does not close the application or release requirements below.
   The current Linux Release also persisted a pane-local bookmark across
   close and relaunch in xterm. See the
   [current settings qualification](ck-files-progress.md#2026-11-24--refresh-recovery-and-bookmark-persistence).
-  Current release sanitizer, full Windows runtime, and macOS desktop
-  acceptance remain open.
+  Current-source macOS and Linux ASan and UBSan and Linux ThreadSanitizer
+  passed with matching SDKs. Windows runtime remains open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
   The current Linux Release build passed xterm volume navigation and
@@ -514,9 +515,13 @@ authority and does not close the application or release requirements below.
   those layout findings and passes matching Linux ASan/UBSan and TSan
   checks. See the [current qualification record](ck-files-progress.md#2026-11-11--volume-layout-and-current-sanitizer-checks)
   for exact scope and the remaining APFS, Windows, and desktop gates.
-  The later read-only checkpoint passed 159 Files, keymap, and shell test
-  entries under Linux ARM64 ThreadSanitizer, including all 44 archive
-  entries. See the [Linux race qualification](ck-files-progress.md#2026-11-24--linux-arm64-files-race-qualification).
+  The published refresh checkpoint passed 159 Files, keymap, and shell test
+  entries under Linux ARM64 ThreadSanitizer and ASan and UBSan, including
+  all 44 archive entries. See the
+  [Linux sanitizer qualification](ck-files-progress.md#2026-11-24--linux-arm64-files-race-qualification).
+  The current macOS terminal window passed pane-local volume navigation
+  and showed the APFS publication refusal before any archive was written.
+  See the [macOS window qualification](ck-files-progress.md#2026-11-24--macos-desktop-terminal).
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates

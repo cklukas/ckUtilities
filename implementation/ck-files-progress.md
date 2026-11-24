@@ -1,5 +1,38 @@
 # Files implementation evidence
 
+## 2026-11-24 — macOS desktop terminal
+
+The `c789f30b61499f6355da143357ef07e4e553f18a` macOS ARM64 Release
+executable ran directly in an isolated VS Code integrated terminal profile.
+The observed process and SHA-256 matched the independently verified
+executable from the Release tests. The desktop check exercised the verified
+process with keyboard input.
+
+- Enter opened a left-pane directory, then a regular file. The text preview
+  showed the fixture content. Switching to hex showed the same bytes.
+  Activating Close returned to the browsing panes.
+- F4 activated the right pane. Ctrl+L followed by a partial directory name
+  displayed a completion proposal. Plain Right accepted it, and Enter opened
+  the directory while the left pane kept its path and file.
+- Backspace above `/` showed volumes, filesystem formats, and free and total
+  capacity in the active pane. The other pane kept its file, and the status
+  gave the APFS archive Copy refusal.
+
+File → Exit ended the verified process. The fixture files were unchanged
+and there were no operation journals. The window receipt SHA-256 is
+`0476017856b2126adfacc5c68f8f6270976ae900ecb10d9cd8651dae8619cccb`.
+The volume pane capture has SHA-256
+`4968752c1c80cc7eae0e39950fd11781721d22b4e14334cfd3ca2f9cc4bb5ab1`.
+
+The same compiled sources at `5e099fae578e27055479508b6dc4eceeec86d058`
+passed all 115 macOS ARM64 Files, keymap, and shell entries under ASan and
+UBSan, plus the independent consumer of the instrumented ckVision SDK.
+The qualification log has SHA-256
+`aeae46a66a6d2d8cb532cb3c8d5a67bb310134a33d49e9781dcd9d92c59c22fb`.
+
+The strict ckdocs build produced 27 pages and 55 assets. All ten utility
+guides rendered at least one local screenshot.
+
 ## 2026-11-24 — Refresh recovery and bookmark persistence
 
 Frontend `c789f30b61499f6355da143357ef07e4e553f18a` gives the refresh
@@ -35,8 +68,8 @@ behavior, clean exit, and restoration of terminal settings.
 | xterm refresh receipt | `ddcc03ad89515d1085c1aaa0973c88febf9442a72419aac4dce558232acf0c68` |
 | xterm bookmark receipt | `766f8a9316591d5cf7de136cfeb254261251a58b45ea7a17d94c101fd55f1080` |
 
-Windows workstation validation remains postponed. macOS desktop-window
-acceptance remains open.
+Windows workstation validation remains postponed. The macOS desktop
+terminal check is recorded above.
 
 ## 2026-11-24 — Linux ARM64 Files race qualification
 
@@ -54,6 +87,25 @@ tested in Release after this sanitizer snapshot was taken.
 | Qualification log | `0a85f56e9b4c43f52f5285e5725f49bcbdbb3d05f4a1ef10b06dd00bc460621d` |
 | CTest detail log | `c9c1fcdc73266702d454b56a969377dad831ac429844528b9268a5adcc6b7466` |
 | Runtime control log | `aa0c678f9f2e8553a3d3a05ccf8edc487e91bd4e2d203915d22bd4e5260850aa` |
+
+Published master `5e099fae578e27055479508b6dc4eceeec86d058` includes the
+refresh footer changes. It passed all 159 Linux ARM64 ThreadSanitizer entries
+and the independent installed SDK consumer. Both the build and test fixture
+used a dedicated native ext4 filesystem. The qualification log has SHA-256
+`f2ec2fb26bc4f1836567a0d9514a9f49d2f480af3b48d7d6a17bbc92c1e322d2`.
+
+The same frontend passed all 159 Linux ARM64 entries under Clang 19
+ASan and UBSan with leak detection, including all 44 archive entries.
+The installed SDK consumer passed. Two application shards on the first
+run timed out with threads blocked in ext4 `fsync` and kernel writeback
+throttling. The full rerun used the same binaries and registered deadlines
+with a separate ext4 test volume. It produced no sanitizer reports.
+
+| Linux ASan and UBSan evidence | SHA-256 |
+| --- | --- |
+| Initial run | `00b84dc69fc74d0ad6fcd29829c5990d98546e64bb2d14144fe28b75196a9cb8` |
+| Kernel I/O observation | `7099c30ccb304fef3f225f09a1eafc997131b78714fadde29b83e4497f09b21d` |
+| Full rerun | `bf8670dbb7afaa73c22209d54091390d1241436a89e6552344e24421e3a2c66e` |
 
 ## 2026-11-24 — Read-only file commands and native APFS refusal
 

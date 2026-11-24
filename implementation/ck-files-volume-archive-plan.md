@@ -126,7 +126,11 @@ The native writer requires no-replace publication of the exact staged file
 through the retained destination directory. Apple DTS confirms that Darwin
 has no public API for adding a hard link to an already-open file descriptor.
 A later lookup can detect a substituted entry only after the link has changed
-the namespace. [Apple DTS response](https://developer.apple.com/forums/thread/850377)
+the namespace. Apple DTS also confirmed that a path-based rename can move a
+substituted source when another process under the same account can write to
+its parent. Exclusive rename protects against replacing the destination.
+The source identity still depends on pathname resolution.
+[Apple DTS follow-up](https://developer.apple.com/forums/thread/850377)
 
 Darwin's `fclonefileat` takes a held source descriptor and an absent destination
 name. It creates a separate file and returns a status code. A future clone
