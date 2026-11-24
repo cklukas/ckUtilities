@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_archive.hpp"
+#include "files_volume_source.hpp"
 #include "native_filesystem.hpp"
 #include "private_journal_scope.hpp"
 #include "sha256.hpp"
@@ -29,6 +30,16 @@ bool replace_on_journal_read = false;
 bool recovery_root_replaced = false;
 ino_t expected_journal_inode = 0;
 dev_t expected_journal_device = 0;
+struct CaptureMutation {
+    int file;
+    int directory;
+    dev_t device;
+    ino_t inode;
+    timespec changed_modified;
+    bool directory_change;
+    bool injected = false;
+};
+CaptureMutation* capture_mutation = nullptr;
 void replace_destination() {
     assert(!destination_moved);
     const auto original = base_path + "/dest";
@@ -39,6 +50,7 @@ void replace_destination() {
 }
 }
 extern "C" ssize_t __real_pread(int, void *, size_t, off_t);
+extern "C" ssize_t __real_pwrite(int, const void *, size_t, off_t);
 extern "C" ssize_t __wrap_pread(int fd, void *data, size_t count, off_t offset) {
     if (replace_on_journal_read) {
         struct stat opened{};
@@ -50,12 +62,26 @@ extern "C" ssize_t __wrap_pread(int fd, void *data, size_t count, off_t offset) 
         replace_on_journal_read = false;
         recovery_root_replaced = true;
     }
-    return __real_pread(fd, data, count, offset);
+    const auto read = __real_pread(fd, data, count, offset);
+    if (read > 0 && capture_mutation && !capture_mutation->injected) {
+        auto& mutation = *capture_mutation;
+        struct stat opened{};
+        assert(fstat(fd, &opened) == 0);
+        if (opened.st_dev == mutation.device && opened.st_ino == mutation.inode) {
+            if (mutation.directory_change)
+                assert(mkdirat(mutation.directory, "added-during-capture", 0700) == 0);
+            else
+                assert(__real_pwrite(mutation.file, "EDIT", 4, 0) == 4);
+            const timespec timestamps[] = {{0, UTIME_OMIT}, mutation.changed_modified};
+            assert(futimens(mutation.directory_change ? mutation.directory : mutation.file, timestamps) == 0);
+            mutation.injected = true;
+        }
+    }
+    return read;
 }
 extern "C" int __real_ftruncate(int,off_t);
 extern "C" int __wrap_ftruncate(int fd,off_t n){if(armed){struct stat s{};assert(fstat(fd,&s)==0&&S_ISREG(s.st_mode)&&s.st_nlink==0);known=true;stage_dev=s.st_dev;stage_ino=s.st_ino;}
  return __real_ftruncate(fd,n);}
-extern "C" ssize_t __real_pwrite(int,const void*,size_t,off_t);
 extern "C" ssize_t __wrap_pwrite(int fd,const void* data,size_t n,off_t at){
  const auto r=__real_pwrite(fd,data,n,at);
  if(armed&&stage(fd)&&!write_seen){write_seen=true;
@@ -104,6 +130,41 @@ void verify_archive(const std::string& path,OperationJournalState expected_state
 }
 }
 namespace {
+void live_capture_refuses_observed_change(bool directory_change) {
+    const auto path = base_path + "/source";
+    assert(mkdir(path.c_str(), 0700) == 0);
+    const int directory = open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    assert(directory >= 0);
+    const int file = openat(directory, "payload", O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    assert(file >= 0 && __real_pwrite(file, "DATA", 4, 0) == 4);
+
+    NativeFileSystem filesystem;
+    auto root = take(filesystem.open_native_directory(address(path)));
+    const auto metadata = take(root->inspect_basic());
+    auto selected = source();
+    selected.mount_point = path;
+    assert(metadata.identity.value() && metadata.mount_id.value());
+    selected.archive.root = {*metadata.identity.value(), *metadata.mount_id.value()};
+    root.reset();
+    assert(capture_native_volume_archive_source(selected).value());
+
+    struct stat file_stat{}, changed_stat{};
+    assert(fstat(file, &file_stat) == 0);
+    assert(fstat(directory_change ? directory : file, &changed_stat) == 0);
+    auto modified = changed_stat.st_mtim;
+    modified.tv_sec -= 10;
+    CaptureMutation mutation{file, directory, file_stat.st_dev, file_stat.st_ino, modified, directory_change};
+    capture_mutation = &mutation;
+    const auto changed = capture_native_volume_archive_source(selected);
+    capture_mutation = nullptr;
+    assert(mutation.injected);
+    assert(fstat(file, &file_stat) == 0 && file_stat.st_size == 4);
+    assert(close(file) == 0 && close(directory) == 0);
+    assert(!changed.value() && changed.state() == ObservationState::Changed);
+    assert(changed.unavailable_detail()->error.operation ==
+           (directory_change ? "volume_archive.source.directory_changed" : "volume_archive.source.entry_changed"));
+}
+
 void verify_unpublished_archive() {
     for (const auto *component : {"/dest/image.ckarchive", "/moved/image.ckarchive"}) {
         struct stat image{};
@@ -181,7 +242,12 @@ void reviewed_write_refuses_changed_admission() {
 }
 }
 
-int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_path=argv[1];assert(mkdir((base_path+"/dest").c_str(),0700)==0&&mkdir((base_path+"/private").c_str(),0700)==0);
+int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_path=argv[1];
+ if (is("source-edited-during-capture") || is("source-directory-changed-during-capture")) {
+    live_capture_refuses_observed_change(is("source-directory-changed-during-capture"));
+    return 0;
+ }
+ assert(mkdir((base_path+"/dest").c_str(),0700)==0&&mkdir((base_path+"/private").c_str(),0700)==0);
  // Caller durably provisions the private Root namespace before acquisition.
  int parent=open(base_path.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);assert(parent>=0&&fsync(parent)==0&&close(parent)==0);
  NativeFileSystem fs;auto dest=std::shared_ptr<const DirectoryCursor>(take(fs.open_native_directory(address(base_path+"/dest"))));auto root=take(acquire_native_journal_root(address(base_path+"/private")));

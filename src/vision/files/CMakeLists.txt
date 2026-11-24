@@ -70,6 +70,7 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
       cancel-close-oom cancel-after-publish close-oom first-enospc-close-oom
       upstream-oom-close post-link-flush service service-legacy-root service-oom no-owner
       destination-moved-during-write destination-moved-at-publish source-mount-changed-during-write
+      source-edited-during-capture source-directory-changed-during-capture
       recovery-root-replaced recovery-journal-appeared-during-review)
     add_test(NAME ck_files_archive_native_${archive_case} COMMAND ${Python3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_volume_archive_native.py

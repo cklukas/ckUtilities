@@ -209,7 +209,35 @@ struct Frame final {
     std::shared_ptr<DirectoryCursor> directory;
     std::string path;
     std::size_t depth = 0;
+    BasicMetadata before;
 };
+
+// These are live bookends for detecting observed changes while capturing an
+// entry. Reading can update atime. Equal observations do not freeze the object.
+Observation<bool> check_capture_version(const BasicMetadata &before,
+                                        const Observation<BasicMetadata> &observed,
+                                        const char *changed_operation) {
+    if (!observed.value())
+        return unavailable<bool>(*observed.unavailable_detail());
+    const auto &after = *observed.value();
+    UnavailableObservation identity_failure;
+    if (!same_identity(before.identity, after.identity, identity_failure))
+        return unavailable<bool>(identity_failure);
+    if (!before.kind.value() || !after.kind.value() || !before.mount_id.value() || !after.mount_id.value() ||
+        !before.link_count.value() || !after.link_count.value() || !before.modified.value() ||
+        !after.modified.value() || !before.changed.value() || !after.changed.value() ||
+        (*before.kind.value() == ObjectKind::RegularFile &&
+         (!before.logical_size.value() || !after.logical_size.value())))
+        return unavailable<bool>(ObservationState::Unknown, AdapterError::UnqualifiedIdentity,
+                                 "volume_archive.source.version_unavailable");
+    if (*before.kind.value() != *after.kind.value() || *before.mount_id.value() != *after.mount_id.value() ||
+        *before.link_count.value() != *after.link_count.value() || *before.modified.value() != *after.modified.value() ||
+        *before.changed.value() != *after.changed.value() ||
+        (*before.kind.value() == ObjectKind::RegularFile &&
+         *before.logical_size.value() != *after.logical_size.value()))
+        return unavailable<bool>(ObservationState::Changed, AdapterError::MetadataChanged, changed_operation);
+    return Observation<bool>::available(true);
+}
 
 bool same_mount_root(const FilesVolumeMountRoot &expected, const BasicMetadata &actual) {
     return actual.kind.value() && *actual.kind.value() == ObjectKind::Directory &&
@@ -250,7 +278,7 @@ Observation<bool> revalidate_source_root(const NativeAbsolutePath &route, const 
 Observation<FilesVolumeArchiveDocument> capture_volume_document(
     const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
     const FilesVolumeArchiveSourceLimits &limits, std::shared_ptr<DirectoryCursor> root,
-    ck::files::NameEncoding path_encoding, std::uint64_t root_mount) {
+    ck::files::NameEncoding path_encoding, std::uint64_t root_mount, BasicMetadata root_metadata) {
     FilesVolumeArchiveDocument document;
     document.source = source;
     document.consistency = consistency;
@@ -261,7 +289,7 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
              "portable root-directory metadata is not encoded");
 
     std::vector<Frame> frames;
-    frames.push_back({std::move(root), {}, 0});
+    frames.push_back({std::move(root), {}, 0, std::move(root_metadata)});
     std::vector<std::pair<ObjectIdentity, std::uint64_t>> hard_links;
     std::uint64_t next_hard_link_group = 1;
 
@@ -277,8 +305,13 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
             return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
                 AdapterError::InterruptedRead, "volume_archive.source.cancelled");
         if (batch.names.empty()) {
-            if (batch.state == ck::files::DirectoryReadState::End)
+            if (batch.state == ck::files::DirectoryReadState::End) {
+                const auto consistent = check_capture_version(frame.before, frame.directory->inspect_basic(),
+                                                              "volume_archive.source.directory_changed");
+                if (!consistent.value())
+                    return unavailable<FilesVolumeArchiveDocument>(*consistent.unavailable_detail());
                 frames.pop_back();
+            }
             continue;
         }
         if (batch.names.size() != 1 || !batch.names.front().is_valid())
@@ -433,8 +466,6 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
             add_loss(document, index, path, FilesVolumeArchiveLossKind::UnsupportedObject, true,
                      "object kind is not representable in a filesystem archive");
         }
-        document.entries.push_back(std::move(entry));
-
         if (kind == ObjectKind::Directory) {
             if (frame.depth >= limits.max_depth)
                 return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
@@ -449,8 +480,17 @@ Observation<FilesVolumeArchiveDocument> capture_volume_document(
             if (!same_mount_root({*metadata.identity.value(), root_mount}, *current.value()))
                 return unavailable<FilesVolumeArchiveDocument>(ObservationState::Changed,
                     AdapterError::MetadataChanged, "volume_archive.source.directory_identity");
-            frames.push_back({std::move(child_cursor), path, frame.depth + 1});
+            const auto consistent = check_capture_version(metadata, current, "volume_archive.source.directory_changed");
+            if (!consistent.value())
+                return unavailable<FilesVolumeArchiveDocument>(*consistent.unavailable_detail());
+            frames.push_back({std::move(child_cursor), path, frame.depth + 1, *current.value()});
+        } else if (entry.kind != FilesVolumeArchiveEntryKind::Unsupported) {
+            const auto consistent = check_capture_version(metadata, held->inspect_basic(),
+                                                          "volume_archive.source.entry_changed");
+            if (!consistent.value())
+                return unavailable<FilesVolumeArchiveDocument>(*consistent.unavailable_detail());
         }
+        document.entries.push_back(std::move(entry));
     }
 
     return Observation<FilesVolumeArchiveDocument>::available(std::move(document));
@@ -513,7 +553,7 @@ Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_sourc
             AdapterError::MetadataChanged, "volume_archive.source.mount_changed");
 
     auto document = capture_volume_document(source, consistency, stop_token, limits, root,
-                                             root_address.value()->encoding(), expected.mount_id);
+                                             root_address.value()->encoding(), expected.mount_id, *root_metadata.value());
     if (!document.value())
         return unavailable<FilesVolumeArchiveSourceCapture>(*document.unavailable_detail());
     const auto route = std::move(root_address).take_value();

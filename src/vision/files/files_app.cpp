@@ -3528,6 +3528,11 @@ struct FilesApp::State {
         if (reply.state != FilesVolumeArchivePlanningState::Ready || !reply.review) {
             if (reply.error && report_read_only_archive_destination(*reply.error))
                 return;
+            if (reply.error && (reply.error->error.operation == "volume_archive.source.entry_changed" ||
+                                reply.error->error.operation == "volume_archive.source.directory_changed")) {
+                report_archive_error("Archive source changed during capture. Start a new review.");
+                return;
+            }
             std::string message = reply.state == FilesVolumeArchivePlanningState::Cancelled
                 ? "Volume archive cancelled" : "Volume archive planning failed";
             if (reply.error)
