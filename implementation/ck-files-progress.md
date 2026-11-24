@@ -1,5 +1,39 @@
 # Files implementation evidence
 
+## 2026-11-24 — Volume archive progress and cancellation
+
+Frontend `3370cb7` displays native write and read-back progress in the Files
+pane footer. The write total includes the archive header, manifest, and stored
+extents. Verification counts the full logical archive, including sparse
+holes. The archive worker retains one progress snapshot for the active
+ticket. An accepted cancellation request stays visible while the worker
+finishes, and the terminal reply determines the outcome.
+
+The Linux native tests held the worker at its first archive write and first
+verification read to check both totals. They also requested cancellation
+during the write and checked that no final archive was published. An
+ordinary-user Linux ARM64 xterm run observed 64.0 MiB to write and
+128.0 MiB to verify. Its independent reconstruction matched the source
+SHA-256 `5dbb72134f1f4b6c2075a354b0712557191aebca516ffde6fa015fc34c03d102`.
+
+macOS ARM64 Release passed all 115 Files, keymap, and shell entries. Linux
+ARM64 Release passed the 55 affected application and archive entries. Both
+passed the independent ckVision SDK consumer. All 23 Linux native archive
+cases passed with ASan/UBSan and again with ThreadSanitizer. Each sanitizer
+build used its matching instrumented ckVision 2.1 SDK and passed the
+independent SDK consumer. The Files guide passed a strict ckdocs build.
+Windows runtime qualification remains postponed, and native APFS archive
+publication remains open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release | `b4d3513e721335a363fc8024de35efdc7ca169b37eac0897de8b90a4e4c90b29` |
+| Linux ARM64 Release build and progress regressions | `0741163e4f6583d5ed7af70b39e179fbe26a46da9132491791e91f80d9978dc6` |
+| Linux ARM64 affected Release suite | `ef3e80c4904765fdb5f5907909b0722a4a1e6e05e5d4f0e501e366f6cf1ec7e4` |
+| Linux ARM64 ASan/UBSan native archive suite | `3347e7d4d864729de54a1bf9a1f16ef26569365b31eefe235c232f4a97eff74d` |
+| Linux ARM64 ThreadSanitizer native archive suite | `52ce7f3142399e1d9c0f75a44d2316a0a6de16cee195bca609d1b8d63f26b9f8` |
+| Linux ARM64 xterm receipt | `f152d09a4c315d43ec3cd31d0160fd8911a77e0fcbcf3d8cd6e1eaccc15a0ded` |
+
 ## 2026-11-24 — Virtual archive loss review
 
 Frontend `085a3a7` uses a ckVision provider-backed list for archive losses.

@@ -543,6 +543,9 @@ authority and does not close the application or release requirements below.
   each listed record. The [review qualification](ck-files-progress.md#2026-11-24--virtual-archive-loss-review)
   covers large lists, incomplete and revoked consent, and keyboard and
   pointer review through native Linux publication.
+  The [archive progress checkpoint](ck-files-progress.md#2026-11-24--volume-archive-progress-and-cancellation)
+  covers native write and verification counts, an ordinary-user xterm
+  reconstruction, and cancellation before publication.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
