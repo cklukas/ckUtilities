@@ -77,6 +77,11 @@ are never upgraded because a filesystem label looks familiar.
   loss. Unknown metadata is a hard planning stop.
 - Use descriptor/handle-relative operations and identity checks to limit
   symlink races and source replacement. A path string is never an identity.
+- Bracket live file capture and directory enumeration with native observations
+  from the held object. Reject changes to identity, type, mount, link count,
+  regular-file length, modification time, or change time. Ignore atime updates
+  caused by reading. Missing required change observations stop capture.
+  Describe the resulting capture as Live.
 
 ### B. Archive-specific planning and review
 
@@ -182,6 +187,10 @@ both directions and verified hard-link groups, symlink targets, ACL and xattr
 loss review, source-mount detachment, and destination-name conflicts.
 [Linux provider qualification](ck-files-progress.md#2026-11-24--native-xfs-and-btrfs-volume-archives)
 Positive native archive publication on macOS and Windows remains open.
+The live capture currently retains all captured extent bytes in its reviewed
+document. Entry, depth, and per-read limits leave the aggregate payload size
+dependent on available memory. Large-volume qualification still requires
+bounded streaming through worker-owned storage.
 An earlier macOS broad app ASan run reported a libc++ container-overflow in
 `DirectoryCursor::read`. Frontend `60a835a` passed the matching macOS
 ASan/UBSan Files and keymap suite with default container annotations.

@@ -1,5 +1,43 @@
 # Files implementation evidence
 
+## 2026-11-24 — Live archive capture and native failures
+
+Frontend `9c323b4` brackets file capture and directory enumeration with
+change observations on held native objects. It refuses an observed source
+change before the review can authorize publication. Live captures retain
+their live consistency classification.
+
+Linux ARM64 controls injected a same-length overwrite or added a directory
+entry at the first successful native content read. Both controls reproduced
+acceptance on `4fc4ee3` with the new tests overlaid. Both passed on the
+fixed source, along with all 161 Files, keymap, and shell ASan/UBSan entries
+and the installed SDK consumer. The control log SHA-256 is
+`45d8bfcc17f220885e5a1730c42fc905f0106891ed9cc6ab60b5b973d71e921f`.
+
+The same capture code passed sparse publication and reconstruction on
+ext4 and in both directions between XFS and Btrfs in Debian xterm. The
+XFS and Btrfs fixtures exercised link targets and required ACL and xattr
+loss review again.
+
+Frontend `7599121` reported an unreadable source as access denied and
+reported storage exhaustion in the pane status. The denied-read test
+created neither an archive nor a journal. The full ext4 destination had
+zero available blocks after review. Approval published no archive,
+preserved the existing destination file, and retained the failure journal.
+The matching macOS ARM64 Release passed 115 Files, keymap, and shell
+entries and the independent installed SDK consumer.
+The matching Linux ARM64 ASan/UBSan build passed all 161 entries and the
+installed consumer on a fresh ext4 test volume.
+
+| Native evidence | SHA-256 |
+| --- | --- |
+| XFS to Btrfs with the new capture checks | `e3e333d9a22a2ee067da70d7d03242147cd8292e2dfe21fa3a39dfdac056a0fe` |
+| Btrfs to XFS with the new capture checks | `22f491d0f6f531a37232cffa04a7718b40a4a8a5e3acc8fbd686044e0da06f18` |
+| Source permission denied | `a53c74b7019415ea44e2ff385ba8a367ac0e5b908925f863706e60a191ed18f7` |
+| Destination storage exhaustion | `4c94a0c2ae5d6859c9b97f712666693f1b6ec133fc79d1a1a8f2eadc9e86b539` |
+| Linux ASan/UBSan qualification | `2c117a3c7e02a07268466ed4caacc1f66586fe454165049e48f7100ad4a84740` |
+| macOS Release qualification | `7a30632e4242d6e36834c96b3564818b2105412ebe90b5a0d8f672b8f3b7e4e4` |
+
 ## 2026-11-24 — Native XFS and Btrfs volume archives
 
 The Linux ARM64 Release executable at `c789f30b61499f6355da143357ef07e4e553f18a`

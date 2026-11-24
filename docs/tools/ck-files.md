@@ -75,14 +75,17 @@ clipboard.
   reviewed source and destination panes. The worker keeps the source mount
   root and destination directory open through approval. If either was
   replaced or the archive name was taken, Files asks for a new review.
+  Live capture also stops when it observes a file or directory change while
+  reading the source. A new review builds a fresh capture.
   After confirmed publication, Files displays the result in the original
   destination pane and refreshes it when the pane still shows that directory.
   The worker verifies the archive data, checks both routes again, and
   publishes through the held folder. If the folder moves during publication,
   Files displays the path only if it can verify the reviewed location. Files
   reports indeterminate durability when a flush or journal step after
-  publication cannot be proven. On startup and after each archive attempt,
-  a bounded read-only scan checks private archive journals through the held
+  publication cannot be proven. If storage fills or a quota is reached before
+  publication, the pane status reports that failure. On startup and after each
+  archive attempt, a bounded read-only scan checks private archive journals through the held
   journal directory and reports if that directory was replaced. Each attempt has its own journal ID, so completed records
   remain available when Files restarts. Copy remains disabled until the scan
   completes and no journal needs reconciliation. At approval, the archive

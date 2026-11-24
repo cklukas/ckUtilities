@@ -527,6 +527,10 @@ authority and does not close the application or release requirements below.
   and Btrfs, including sparse data, links, and review of ACL and xattr losses.
   A detached source and a newly occupied destination each rejected the stale
   review. See the [Linux provider qualification](ck-files-progress.md#2026-11-24--native-xfs-and-btrfs-volume-archives).
+  The live capture checks reject a same-length edit or directory entry
+  addition detected during native reads. Real xterm runs also verified
+  unreadable-source refusal and full-destination failure.
+  See the [native capture qualification](ck-files-progress.md#2026-11-24--live-archive-capture-and-native-failures).
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
