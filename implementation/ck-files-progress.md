@@ -1,5 +1,34 @@
 # Files implementation evidence
 
+## 2026-11-24 — Virtual archive loss review
+
+Frontend `085a3a7` uses a ckVision provider-backed list for archive losses.
+The dialog renders the visible rows and keeps a compact acknowledgement bit
+for each record. The exact escaped native path and full explanation remain
+available in Details. Returning to the archive summary preserves each
+acknowledgement. Approval still requires every loss to be acknowledged, and
+hard losses prevent creation.
+
+A headless application regression reached the last of 4,097 loss records,
+opened its detail, checked that an incomplete review rejects creation, and
+verified that undo revokes consent. macOS ARM64 Release passed all 115
+Files, keymap, and shell entries and the independent ckVision consumer.
+All four macOS application shards passed under ASan/UBSan with the matching
+instrumented ckVision SDK. The first invocation stopped before running tests
+because this Apple runtime rejected the explicit leak detection option. The
+passing invocation used the same executable and the supported ASan/UBSan
+options.
+An ordinary-user Linux ARM64 xterm run acknowledged all nine losses using
+both keyboard and pointer input, then published a sparse ext4 archive.
+Independent reconstruction matched the 4 MiB source SHA-256. The Files
+guide passed a strict ckdocs build.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release build and tests | `81725b3ecea398fa2c45882c9c4b29784c603bd3cd8d4b1777d09bf425ad26b5` |
+| macOS ARM64 ASan/UBSan application shards | `17defed4d34036969f9a11f2eff72a46db8c7e0fbb6c86c429063252aa117ebe` |
+| Linux ARM64 xterm receipt | `7f5cc9b34797f04a4c6759c747bb3accce35152dbf1dbe11d3fbdbab37d808e2` |
+
 ## 2026-11-24 — Disk-backed volume archive capture
 
 Files now seals captured data extents in private scratch storage and keeps the

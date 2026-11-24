@@ -539,6 +539,10 @@ authority and does not close the application or release requirements below.
   passed all 161 entries under ASan/UBSan and under ThreadSanitizer. Windows
   runtime and APFS publication remain open. See the
   [disk-backed capture qualification](ck-files-progress.md#2026-11-24--disk-backed-volume-archive-capture).
+  The archive loss review uses a virtual list and keeps explicit consent for
+  each listed record. The [review qualification](ck-files-progress.md#2026-11-24--virtual-archive-loss-review)
+  covers large lists, incomplete and revoked consent, and keyboard and
+  pointer review through native Linux publication.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
