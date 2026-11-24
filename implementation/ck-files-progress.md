@@ -1,5 +1,39 @@
 # Files implementation evidence
 
+## 2026-11-24 — Archive metadata read failures block creation
+
+Frontend `4f51c32` marks failed metadata observations as hard archive
+losses and includes the native operation in the review. It also checks
+failed reads of individual extended-attribute values. A known preservation
+loss can still be acknowledged. A failure to determine what the source
+contains blocks approval.
+
+Both native Linux regression cases reproduced the gap on `170c1e7`.
+They inject `EIO` while listing attributes and while reading an attribute
+value from the held source. With the fix, both cases rejected approval
+even after acknowledging every listed loss, and the healthy controls
+still approved the known xattr loss. The tests checked that source bytes
+and the xattr stayed intact and the destination remained empty.
+
+The final Release runs passed 115 Files, keymap, and shell entries on
+macOS ARM64 and 61 affected entries on Linux ARM64. The APFS source fixture
+and both independent ckVision SDK consumers passed.
+
+An ordinary-user Linux xterm run injected the catalog failure in the real
+Files process. Its review identified the affected path and native operation
+and blocked Create. Cancelling preserved the source bytes and xattr and
+left the destination and archive journal namespace untouched. The first
+desktop check timed out because its text assertion expected the native
+operation on one line. The rerun accepted the wrapped display and passed.
+Matching sanitizer qualification of this source change remains open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release | `4e01174543d31924fd77b25861699ed9942822aefd8ccfa5742a5906c0cd0e84` |
+| Linux ARM64 pre-fix fault controls | `82a8f342452c7214a9486c55c25e5a3b168f368513fd8cf43d868f5946c7ab5b` |
+| Linux ARM64 Release | `fc5a95d338846de9978774dfc7779dbfcb3fcf24eead64e1059a294db56c4c5c` |
+| Linux ARM64 xterm hard-loss receipt | `56f4a22d8260ad6e9374756f62b2f3f527ab4dd571c8b9c8a56a2bc74ea39ae0` |
+
 ## 2026-11-24 — Native APFS archive source capture
 
 Frontend test `f55bfe7` exercised the live source adapter as an ordinary
