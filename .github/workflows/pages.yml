@@ -19,7 +19,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ckutilities-native-serial
+  # Pages uses hosted runners. Its queued runs must not replace queued native CI.
+  group: ckutilities-pages
   cancel-in-progress: false
 
 env:

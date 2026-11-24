@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-# Shared with release and Pages. Serialize runs, never cancel active builds.
+# Shared with release so their native builds stay serialized.
 concurrency:
   group: ckutilities-native-serial
   cancel-in-progress: false
