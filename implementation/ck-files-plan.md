@@ -546,6 +546,9 @@ authority and does not close the application or release requirements below.
   The [archive progress checkpoint](ck-files-progress.md#2026-11-24--volume-archive-progress-and-cancellation)
   covers native write and verification counts, an ordinary-user xterm
   reconstruction, and cancellation before publication.
+  The [native process restart checkpoint](ck-files-progress.md#2026-11-24--volume-archive-process-restart-and-inspection)
+  covers four process crash boundaries on ext4, XFS, and Btrfs,
+  bounded long native journal paths, and the real xterm recovery dialog.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates

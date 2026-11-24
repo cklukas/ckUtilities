@@ -1,5 +1,48 @@
 # Files implementation evidence
 
+## 2026-11-24 — Volume archive process restart and inspection
+
+Frontend `6987954` starts a reviewed archive with a native source and
+disk-backed scratch. The fault fixture ends the writer process with
+`SIGKILL` during the first write, immediately before and after the native
+link, and after the durable destination commit record. A fresh process
+discovers the actual journal. It checks the recovery state, refuses a
+subsequent reviewed Copy to a different archive name, and preserves
+the source, journal, and any published archive. All four boundaries passed
+as an ordinary user on Linux ARM64 ext4, XFS, and Btrfs. These cases
+exercise process death and restart. Power-loss behavior has its own gate.
+
+Frontend `d836391` removes the journal reader's 4 KiB cap for native
+addresses. It keeps a finite field bound shared with native paths and
+rejects oversized source evidence before staging. The regression checks
+exact POSIX bytes, Windows drive and extended UNC UTF-16 units, including
+an unpaired code unit, legacy evidence and the current native envelope.
+That regression and all 27 Linux native archive cases passed with
+ASan/UBSan and again with ThreadSanitizer using matching ckVision 2.1
+SDKs.
+
+The ordinary-user xterm restart showed the actual archive beside a disabled
+volume Copy. The first dialog attempt exposed a clipped, single-line
+journal report. Frontend `493b097` renders the report as scrollable text.
+The verified rerun showed the recorded state and action after interrupting
+publication at the native link. It preserved the archive and journal
+identities and digests and quit normally from the restarted process.
+
+The final dialog build passed all 115 macOS ARM64 and 59 affected Linux
+ARM64 Release entries, plus both independent ckVision consumers. An earlier
+Linux sweep failed the injected destination-move-at-publication case while
+other fixtures were being created. The unchanged binary passed five
+isolated repeats and the full serial sweep.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release | `15a95056d6feb1da5bf5e8e69c6bcd67ec766228c7f2cf56cb3ecae43604d01c` |
+| Linux ARM64 serial Release | `827dee5116729db6a325cf430710204cbb9a1ee4d2f47b145ed0e16091154896` |
+| Linux ARM64 ASan/UBSan | `3f8180b3972973e36359b6b262ea707f291ca99dd54712e53f02d8f7348cee9d` |
+| Linux ARM64 ThreadSanitizer | `3c8ee75bc99c4a9e9ec53c1f5bdec039a106989eaf4e2822e68baa2d1420f30a` |
+| Linux ARM64 XFS and Btrfs crash boundaries | `44433da5e2881614466a69c439604697ae8dc9d2e98b6d5d2fa3ba328e0fdc23` |
+| Linux ARM64 xterm restart receipt | `3e38a57b9f4b8c721b9cf6de7de75027331bb72d148f7c491ea8ffc35831a86b` |
+
 ## 2026-11-24 — Volume archive progress and cancellation
 
 Frontend `3370cb7` displays native write and read-back progress in the Files
