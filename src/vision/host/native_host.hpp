@@ -8,6 +8,10 @@
 #include <vector>
 #include <stdexcept>
 #if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #include "cvision/term/windows_clock.hpp"
 #include "cvision/term/windows_filesystem.hpp"
 #include "cvision/term/windows_terminal.hpp"

@@ -2860,8 +2860,8 @@ CK_TEST(files_app_archive_loss_review_keeps_large_lists_virtual_and_requires_all
     CK_CHECK(!outcome->value());
     outcome.reset();
 
-    auto small = make_review(2);
-    FilesVolumeArchiveReviewDialog small_dialog(f.application, desktop, roles, small, completion);
+    auto small_review = make_review(2);
+    FilesVolumeArchiveReviewDialog small_dialog(f.application, desktop, roles, small_review, completion);
     press("Review &losses", "l");
     press("&Acknowledge", "a");
     list()->set_cursor(1);
@@ -2876,7 +2876,7 @@ CK_TEST(files_app_archive_loss_review_keeps_large_lists_virtual_and_requires_all
     press("&Back", "b");
     press("&Create archive", "c");
     f.until([&] { return outcome.has_value(); });
-    CK_CHECK(outcome->value() && outcome->value()->review() == small &&
+    CK_CHECK(outcome->value() && outcome->value()->review() == small_review &&
              outcome->value()->continued_with_listed_losses());
 }
 CK_TEST(files_app_volume_properties_keep_the_full_mount_and_exact_capacity_in_a_narrow_pane) {
