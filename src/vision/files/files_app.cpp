@@ -1262,18 +1262,22 @@ struct FilesApp::State {
                        ? FilesCommandAvailability::available()
                        : unavailable("Open unavailable: select a file or folder");
         }
-        if (command == "ck.files.create_directory")
-            return ready(active) ? FilesCommandAvailability::available()
-                                 : unavailable("New folder unavailable: active pane is not ready");
-        if (command == "ck.files.create_file")
-            return ready(active) ? FilesCommandAvailability::available()
-                                 : unavailable("New file unavailable: active pane is not ready");
+        if (command == "ck.files.create_directory" || command == "ck.files.create_file") {
+            const auto *label = command == "ck.files.create_directory" ? "New folder" : "New file";
+            if (!ready(active))
+                return unavailable(std::string(label) + " unavailable: active pane is not ready");
+            return panes[active].read_only_mount.value_or(false)
+                ? unavailable(std::string(label) + " unavailable: active mount is read-only")
+                : FilesCommandAvailability::available();
+        }
         if (command == "ck.files.create_hard_link") {
             if (panes[active].volume_view)
                 return unavailable("Hard link unavailable: volume rows are archive sources, not entries");
-            return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile
-                       ? FilesCommandAvailability::available()
-                       : unavailable("Hard link unavailable: select a regular file");
+            if (!ready(active) || panes[active].model.cursor_kind() != ck::files::ObjectKind::RegularFile)
+                return unavailable("Hard link unavailable: select a regular file");
+            return panes[active].read_only_mount.value_or(false)
+                ? unavailable("Hard link unavailable: active mount is read-only")
+                : FilesCommandAvailability::available();
         }
         if (command == "ck.files.create_symbolic_link") {
             if (panes[active].volume_view)
@@ -1281,18 +1285,23 @@ struct FilesApp::State {
 #if defined(_WIN32)
             return unavailable("Symbolic link unavailable: handle-relative Windows reparse publication is not qualified");
 #else
-            return ready(active) ? FilesCommandAvailability::available()
-                                 : unavailable("Symbolic link unavailable: active pane is not ready");
+            if (!ready(active))
+                return unavailable("Symbolic link unavailable: active pane is not ready");
+            return panes[active].read_only_mount.value_or(false)
+                ? unavailable("Symbolic link unavailable: active mount is read-only")
+                : FilesCommandAvailability::available();
 #endif
         }
         if (command == "ck.files.rename" || command == "ck.files.trash" ||
             command == "ck.files.permanently_delete") {
+            const auto *label = command == "ck.files.rename" ? "Rename"
+                : command == "ck.files.trash" ? "Trash / Recycle Bin" : "Delete";
             if (panes[active].volume_view)
-                return unavailable(std::string(command == "ck.files.rename" ? "Rename" :
-                                                       command == "ck.files.trash" ? "Trash / Recycle Bin" : "Delete") +
-                                   " unavailable: volume rows are archive sources, not entries");
+                return unavailable(std::string(label) + " unavailable: volume rows are archive sources, not entries");
             if (!ready(active) || !panes[active].model.target())
                 return unavailable("Operation unavailable: select a current entry");
+            if (panes[active].read_only_mount.value_or(false))
+                return unavailable(std::string(label) + " unavailable: active mount is read-only");
             if (command == "ck.files.trash" &&
                 panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
                 return unavailable("Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified");
@@ -1365,6 +1374,10 @@ struct FilesApp::State {
             if (!ready(active) || !ready(1 - active))
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: both panes must be ready");
+            if (panes[1 - active].read_only_mount.value_or(false))
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: destination mount is read-only");
+            if (move && panes[active].read_only_mount.value_or(false))
+                return unavailable("Move unavailable: source mount is read-only");
             if (services[active]->working() || services[1 - active]->working())
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: a pane worker is busy");
             const auto &selection = panes[active].selection;

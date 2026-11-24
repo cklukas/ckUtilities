@@ -36,6 +36,9 @@ clipboard.
 - Two independent panes with an explicit active-pane indicator, resizable
   layout, narrow-terminal fallback, location fields, breadcrumbs, history,
   bookmarks, parent/home/root navigation, and Windows drive/UNC entry.
+- A known read-only mount disables commands that would change it and shows the
+  reason in the active pane. Navigation, preview, and marking remain available.
+  You can copy from a read-only mount to a writable destination.
 - At a namespace root, pressing **Backspace** once replaces that pane's file
   rows with a read-only volume and mount listing above the normal filesystem
   boundary. Mount shows the mount/drive name; Type shows the filesystem format;
