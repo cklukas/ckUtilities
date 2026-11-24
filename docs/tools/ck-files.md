@@ -103,7 +103,9 @@ clipboard.
   worker checks recovery again and uses the same inspected directory for the
   new journal.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
-  available as a bounded, read-only review of matching journals. A separate
+  available as a scrollable, read-only review of matching journals. It shows
+  the archive name, recorded state, and required action for each entry in
+  the review. A separate
   worker boundary refuses restart cleanup because the original archive
   creator's live ownership is unavailable. **Clean up archive staging** stays
   disabled with that reason. Restart records are available for inspection

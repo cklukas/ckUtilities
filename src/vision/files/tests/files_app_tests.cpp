@@ -2751,6 +2751,7 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.command("ck.files.inspect_archive_recovery"));
     f.until([&] { return f.painted().find("Archive recovery review") != std::string::npos; });
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);
+    CK_CHECK(f.painted().find("Inspection error:") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
 }
@@ -3070,6 +3071,14 @@ CK_TEST(files_app_archive_cleanup_requires_live_creator_ownership) {
     CK_CHECK(!f.app->availability("ck.files.cleanup_archive_recovery").enabled);
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.cleanup_archive_recovery")));
     CK_CHECK(!f.command("ck.files.cleanup_archive_recovery"));
+    CK_CHECK(f.command("ck.files.inspect_archive_recovery"));
+    f.until([&] { return f.painted().find("Archive recovery review") != std::string::npos; });
+    const auto review = f.painted();
+    CK_CHECK(review.find("Archive: fixture.ckarchive") != std::string::npos);
+    CK_CHECK(review.find("State: copied") != std::string::npos);
+    CK_CHECK(review.find("Action: inspect unpublished staging") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
 }
 
 CK_TEST(files_app_operation_recovery_without_service_reports_status_reason) {

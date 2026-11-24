@@ -393,7 +393,6 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> trash_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
-    std::optional<ckv::widgets::DescriptorDialogPresentation> archive_recovery_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> archive_cleanup_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_cleanup_dialog;
@@ -922,7 +921,6 @@ struct FilesApp::State {
         trash_window = nullptr;
         delete_dialog.reset();
         delete_window = nullptr;
-        archive_recovery_dialog.reset();
         archive_recovery_window = nullptr;
         archive_cleanup_dialog.reset();
         archive_cleanup_window = nullptr;
@@ -1047,7 +1045,7 @@ struct FilesApp::State {
                (rename_dialog && !rename_dialog->completed()) ||
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
-               (archive_recovery_dialog && !archive_recovery_dialog->completed()) ||
+               archive_recovery_open() ||
                (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) ||
                (operation_recovery_dialog && !operation_recovery_dialog->completed()) ||
                (operation_recovery_cleanup_dialog && !operation_recovery_cleanup_dialog->completed()) ||
@@ -1656,13 +1654,17 @@ struct FilesApp::State {
             text += " | " + settings.diagnostic;
         return text;
     }
+    bool archive_recovery_open() const {
+        return archive_recovery_window && !archive_recovery_lifetime.expired();
+    }
     void show_archive_recovery() {
         if (!availability("ck.files.inspect_archive_recovery").enabled ||
             !volume_archive_recovery_scan || modal_pending())
             return;
         std::ostringstream summary;
-        summary << "Read-only inspection. No archive is resumed, deleted, replaced, or retried.\n\n";
+        summary << "Read-only inspection\n\n";
         constexpr std::size_t max_items = 64;
+        constexpr std::size_t max_source_label_bytes = 512;
         const auto &journals = volume_archive_recovery_scan->journals;
         const auto count = std::min(max_items, journals.size());
         for (std::size_t index = 0; index != count; ++index) {
@@ -1670,8 +1672,10 @@ struct FilesApp::State {
             summary << "Journal: " << item.display_name << '\n';
             if (item.report) {
                 const auto &report = *item.report;
-                summary << "Source: " << report.evidence.source_mount_point << '\n'
-                        << "Archive: " << report.evidence.archive_name << '\n'
+                const std::string_view source = report.evidence.source_mount_point;
+                summary << "Source: " << ck::files::display_native_text(source.substr(0, max_source_label_bytes))
+                        << (source.size() > max_source_label_bytes ? "..." : "") << '\n'
+                        << "Archive: " << ck::files::display_native_text(report.evidence.archive_name) << '\n'
                         << "Transaction: " << report.evidence.transaction_id << '\n';
                 if (report.evidence.destination_encoding) {
                     summary << "Destination: exact native path recorded ("
@@ -1683,7 +1687,7 @@ struct FilesApp::State {
                 }
                 for (const auto &recovery : report.operation.items)
                     summary << "State: " << archive_recovery_state(recovery.state)
-                            << "; action: " << archive_recovery_action(recovery.action) << '\n';
+                            << "\nAction: " << archive_recovery_action(recovery.action) << '\n';
                 if (report.operation.has_untrusted_tail)
                     summary << "Journal tail: untrusted\n";
             } else if (item.error) {
@@ -1694,21 +1698,18 @@ struct FilesApp::State {
         if (journals.size() > count)
             summary << "Additional journal entries omitted from this bounded view: "
                     << (journals.size() - count) << '\n';
-        ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Archive recovery review";
-        descriptor.resizable = true;
-        descriptor.fields = {ckv::widgets::FieldDescriptor{.label = summary.str(),
-                                                            .kind = ckv::widgets::FieldKind::Note}};
-        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
-        archive_recovery_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
-        archive_recovery_window = shell->desktop().active_window();
-        archive_recovery_lifetime = archive_recovery_window->lifetime_token();
-        archive_recovery_dialog->set_completion_handler([this](const ckv::widgets::DialogResult &) {
-            archive_recovery_window = nullptr;
-            archive_recovery_dialog.reset();
+        archive_recovery_window = present_files_read_only_text("Archive recovery review", summary.str(),
+            application, shell->desktop(), shell->roles());
+        if (archive_recovery_window) {
+            archive_recovery_lifetime = archive_recovery_window->lifetime_token();
+            archive_recovery_window->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+                if (!weak.expired()) {
+                    archive_recovery_window = nullptr;
+                    labels();
+                }
+            };
             labels();
-        });
+        }
     }
     void show_archive_cleanup() {
         volume_archive_recovery_cleanup_error = availability("ck.files.cleanup_archive_recovery").reason;
@@ -4418,9 +4419,8 @@ struct FilesApp::State {
                 delete_window->close();
             return;
         }
-        if (archive_recovery_dialog && !archive_recovery_dialog->completed()) {
-            if (archive_recovery_window && !archive_recovery_lifetime.expired())
-                archive_recovery_window->close();
+        if (archive_recovery_open()) {
+            archive_recovery_window->close();
             return;
         }
         if (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) {
