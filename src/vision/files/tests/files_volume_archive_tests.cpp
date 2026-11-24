@@ -747,7 +747,7 @@ CK_TEST(volume_archive_review_counts_internal_all_file_and_leading_holes) {
     input.entries.push_back({"dense", FilesVolumeArchiveEntryKind::RegularFile, 2,
                             {{0, {std::byte{'a'}}}, {1, {std::byte{'b'}}}}, {}, 0});
     input.entries.push_back({"empty", FilesVolumeArchiveEntryKind::RegularFile, 0, {}, {}, 0});
-    const auto review = FilesVolumeArchiveReview::create(std::move(input), address(scratch.path()), {},
+    const auto review = FilesVolumeArchiveReview::create(input, address(scratch.path()), {},
                                                           FilesVolumeArchiveDestinationState::Ready);
     CK_CHECK(review.value());
     const auto &summary = (*review.value())->summary();
@@ -760,7 +760,7 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     auto reviewed_document = document();
     reviewed_document.losses.push_back({1, "sparse.bin", FilesVolumeArchiveLossKind::Metadata, false,
                                         "portable timestamps are not encoded"});
-    auto review = FilesVolumeArchiveReview::create(std::move(reviewed_document), address(scratch.path()),
+    auto review = FilesVolumeArchiveReview::create(reviewed_document, address(scratch.path()),
                                                    "loss.ckarchive", FilesVolumeArchiveDestinationState::Ready);
     CK_CHECK(review.value());
     const auto &model = *review.value();
@@ -774,8 +774,7 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     CK_CHECK(approved.value());
     CK_CHECK(approved.value()->continued_with_listed_losses());
 
-    auto unreviewed = model->document();
-    auto unreviewed_request=write_request(unreviewed,scratch.path(),"loss.ckarchive",17);
+    auto unreviewed_request=write_request(std::move(reviewed_document),scratch.path(),"loss.ckarchive",17);
     const auto write_result = write_with_native_owners(unreviewed_request);
     CK_CHECK(!write_result.value());
     CK_CHECK(write_result.state() == ObservationState::Unknown);
@@ -786,7 +785,7 @@ CK_TEST(volume_archive_review_refuses_unrepresentable_windows_path_encoding) {
     auto value = document();
     value.path_encoding = NameEncoding::WindowsUtf16;
     value.entries[0].path = "x"; // odd byte count cannot be UTF-16 native units
-    const auto review = FilesVolumeArchiveReview::create(std::move(value), address(scratch.path()),
+    const auto review = FilesVolumeArchiveReview::create(value, address(scratch.path()),
                                                          "encoding.ckarchive", FilesVolumeArchiveDestinationState::Ready);
     CK_CHECK(!review.value());
     CK_CHECK(review.state() == ObservationState::Unsupported);

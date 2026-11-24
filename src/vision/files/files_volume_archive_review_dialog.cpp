@@ -74,17 +74,17 @@ struct FilesVolumeArchiveReviewDialog::State final : std::enable_shared_from_thi
     }
 
     void build_descriptor() {
-        const auto &document = review->document();
+        const auto &source = review->source();
         const auto &summary = review->summary();
         descriptor.title = "Review volume archive";
         descriptor.resizable = true;
         descriptor.field_description_rows = 2;
         descriptor.fields = {
-            {.label = "Source: " + document.source.name + " | " + document.source.mount_point,
+            {.label = "Source: " + source.name + " | " + source.mount_point,
              .kind = FieldKind::Note},
-            {.label = "Filesystem: " + document.source.filesystem + " | Identity: " + document.source.identity,
+            {.label = "Filesystem: " + source.filesystem + " | Identity: " + source.identity,
              .kind = FieldKind::Note},
-            {.label = "Consistency: " + consistency(document.consistency) + " | Destination: " +
+            {.label = "Consistency: " + consistency(review->consistency()) + " | Destination: " +
                            review->destination_directory().display_text(),
              .kind = FieldKind::Note},
             {.label = "Archive: " + review->archive_name(), .kind = FieldKind::Note},
@@ -100,14 +100,14 @@ struct FilesVolumeArchiveReviewDialog::State final : std::enable_shared_from_thi
         if (summary.destination_conflict)
             descriptor.fields.push_back({.label = "The archive already exists. Choose another destination and start a new review.",
                                          .kind = FieldKind::Note});
-        if (document.losses.empty()) {
+        if (review->losses().empty()) {
             descriptor.fields.push_back({.label = "No unencoded losses were found.", .kind = FieldKind::Note});
         } else {
             descriptor.fields.push_back({.label = "Review each listed non-hard loss before continuing.",
                                          .kind = FieldKind::Note});
-            for (const auto &loss : document.losses) {
+            for (const auto &loss : review->losses()) {
                 loss_fields.push_back(descriptor.fields.size());
-                descriptor.fields.push_back({.label = display_archive_path(loss.path, document.path_encoding) + ": " +
+                descriptor.fields.push_back({.label = display_archive_path(loss.path, review->path_encoding()) + ": " +
                                                      loss_kind(loss.kind) + " — " +
                                                      loss.diagnostic + (loss.hard_failure ? " [cannot continue]" : ""),
                                              .kind = FieldKind::Check,
@@ -131,7 +131,7 @@ struct FilesVolumeArchiveReviewDialog::State final : std::enable_shared_from_thi
             for (std::size_t i = 0; i != self->loss_fields.size(); ++i)
                 if (result.checked[self->loss_fields[i]])
                     reviewed.push_back(i);
-            const auto decision = self->review->document().losses.empty()
+            const auto decision = !self->review->requires_loss_consent()
                                       ? FilesVolumeArchiveReviewDecision::Proceed
                                       : FilesVolumeArchiveReviewDecision::ContinueWithListedLosses;
             auto approved = self->review->approve(decision, reviewed);

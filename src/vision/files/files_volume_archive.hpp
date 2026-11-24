@@ -134,35 +134,40 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
     using Pointer = std::shared_ptr<const FilesVolumeArchiveReview>;
 
     static ck::files::Observation<Pointer> create(
-        FilesVolumeArchiveDocument document, ck::files::NativeAbsolutePath destination_directory,
+        const FilesVolumeArchiveDocument &document, ck::files::NativeAbsolutePath destination_directory,
         std::string archive_name, FilesVolumeArchiveDestinationState destination_state);
 
     static std::string default_archive_name(std::string_view volume_name);
 
-    const FilesVolumeArchiveDocument &document() const noexcept { return document_; }
+    const FilesVolumeRecord &source() const noexcept { return source_; }
+    FilesVolumeArchiveConsistency consistency() const noexcept { return consistency_; }
+    ck::files::NameEncoding path_encoding() const noexcept { return path_encoding_; }
+    const std::vector<FilesVolumeArchiveLoss> &losses() const noexcept { return losses_; }
     const ck::files::NativeAbsolutePath &destination_directory() const noexcept { return destination_directory_; }
     const std::string &archive_name() const noexcept { return archive_name_; }
     const FilesVolumeArchiveReviewSummary &summary() const noexcept { return summary_; }
     bool cancel_is_default() const noexcept { return true; }
-    bool requires_loss_consent() const noexcept { return !document_.losses.empty(); }
+    bool requires_loss_consent() const noexcept { return !losses_.empty(); }
 
-    // Approval binds the immutable document, destination, archive name and
-    // loss list together. It performs no I/O and never authorizes mutation by
-    // itself. The worker pairs it with the retained native destination from
-    // this exact review before writing.
+    // The worker matches the approval to the exact issued review before
+    // using the retained capture and destination. Approval performs no I/O.
     ck::files::Observation<FilesVolumeArchiveApproval> approve(
         FilesVolumeArchiveReviewDecision decision,
         std::span<const std::size_t> reviewed_losses = {}) const;
 
   private:
-    FilesVolumeArchiveReview(FilesVolumeArchiveDocument document,
+    FilesVolumeArchiveReview(const FilesVolumeArchiveDocument &document,
                              ck::files::NativeAbsolutePath destination_directory,
                              std::string archive_name,
-                             FilesVolumeArchiveReviewSummary summary) noexcept
-        : document_(std::move(document)), destination_directory_(std::move(destination_directory)),
+                             FilesVolumeArchiveReviewSummary summary)
+        : source_(document.source), consistency_(document.consistency), path_encoding_(document.path_encoding),
+          losses_(document.losses), destination_directory_(std::move(destination_directory)),
           archive_name_(std::move(archive_name)), summary_(summary) {}
 
-    FilesVolumeArchiveDocument document_;
+    FilesVolumeRecord source_;
+    FilesVolumeArchiveConsistency consistency_;
+    ck::files::NameEncoding path_encoding_;
+    std::vector<FilesVolumeArchiveLoss> losses_;
     ck::files::NativeAbsolutePath destination_directory_;
     std::string archive_name_;
     FilesVolumeArchiveReviewSummary summary_;
