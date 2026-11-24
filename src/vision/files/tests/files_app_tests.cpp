@@ -1487,8 +1487,8 @@ CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes
                !f.app->pending(1) && f.app->status(0).find("Moving") == std::string::npos &&
                f.app->status(1).find("Moving") == std::string::npos;
     });
-    CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
-    CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+    CK_CHECK(f.app->model(0).current() && f.app->model(0).row_count() == 99);
+    CK_CHECK(f.app->model(1).current() && f.app->model(1).row_count() == 4);
     f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
     CK_CHECK(f.command("ck.files.inspect_operation_recovery"));
     f.until([&] {

@@ -1523,9 +1523,8 @@ struct FilesApp::State {
                     text += " | ";
                 text += "Marks lost on refresh: " + std::to_string(p.selection.invalidated_refresh_marks);
             }
-            if (!text.empty())
-                text += " | ";
-            text += "Last scan: " + std::to_string(p.model.row_count()) + " items";
+            if (text.empty())
+                text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
         }
         if (p.active && (!p.model.current() || p.refresh_failed) && text.find("Stale") == text.npos)
             text += "; stale listing";
