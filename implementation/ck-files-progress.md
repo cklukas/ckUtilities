@@ -1,5 +1,36 @@
 # Files implementation evidence
 
+## 2026-11-24 — Read-only volume archive destinations
+
+Frontend `2d6433275c2e9d7d8919262075b8444b762b34ee` publishes the held
+directory's mount state with its navigation result. A read-only destination
+disables volume Copy. The archive worker checks the reviewed destination
+again at approval and immediately before opening the native writer.
+
+The verified Linux ARM64 Release executable `a370ca73ed400b07188518016d9b2ab9b6ccb51e10a6a1b130b10271fd809db6`
+ran through Debian xterm in a private X11 display as an ordinary user.
+Separate native ext4 mounts supplied the source and destination. The preceding
+`4b48075` executable reproduced the issue by opening the review for a
+read-only destination. The fixed build displayed the reason when Copy was
+highlighted, rejected the command, and refused approval if the destination
+was remounted read-only during review. Both refusals left the destination
+and archive journals untouched. The writable case produced a 4,195,367-byte
+archive with 5,120 allocated bytes. The two archived extents and the SHA-256
+of the reconstructed 4,194,304-byte file matched the source independently.
+Every run kept the other pane usable and restored the terminal settings on exit.
+
+| Native xterm evidence | SHA-256 |
+| --- | --- |
+| Read-only destination | `27fad9ae52b205166835c7ef5314ee29074fd166b086f22148b8794bcff5a72a` |
+| Read-only remount during review | `9aab26ef109db9a8301f033e993fb40f92030b2f0bfe6fa732e3a7fb966001b5` |
+| Writable archive and reconstruction | `6c4cd88ea36136d3cbe072cea2779ad81118e612c5a2630a798b10dd21d4a086` |
+
+macOS Release passed all 113 Files test entries for the fix and for the
+follow-up that renders an identical status and hint only once. The
+preceding `4b48075` baseline passed 114 of 115 matching macOS ThreadSanitizer
+entries on the first run. The timed-out Files shard passed unchanged in
+7.19 seconds on rerun. Windows workstation and desktop-window gates are open.
+
 ## 2026-11-24 — ckVision 2.1 qualification checkpoint
 
 Frontend `6e1607e19992628c76c5d3433ac522cdd68838b4` uses ckVision

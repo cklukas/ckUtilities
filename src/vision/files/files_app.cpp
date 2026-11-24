@@ -1580,7 +1580,7 @@ struct FilesApp::State {
             else
                 report_first_unavailable(empty_listing_contextual);
         }
-        if (!hint.empty())
+        if (!hint.empty() && !text.starts_with(hint))
             text += "\nHint: " + hint;
         if (!settings.diagnostic.empty())
             text += " | " + settings.diagnostic;
