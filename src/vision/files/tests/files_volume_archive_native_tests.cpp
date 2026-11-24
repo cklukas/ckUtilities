@@ -15,6 +15,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <new>
+#include <semaphore>
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
@@ -25,6 +26,8 @@ const char* mode="roundtrip";bool armed=false,known=false,write_seen=false,close
 dev_t stage_dev=0;ino_t stage_ino=0;int closed=0,reused=-1;std::stop_source* cancel_source=nullptr;
 std::string base_path;bool stage(int fd){struct stat s{};return known&&fstat(fd,&s)==0&&s.st_dev==stage_dev&&s.st_ino==stage_ino;}
 bool is(const char* text){return !std::strcmp(mode,text);}
+std::binary_semaphore progress_entered(0), progress_continue(0);
+bool verify_seen = false;
 bool destination_moved = false;
 bool replace_on_journal_read = false;
 bool recovery_root_replaced = false;
@@ -52,6 +55,11 @@ void replace_destination() {
 extern "C" ssize_t __real_pread(int, void *, size_t, off_t);
 extern "C" ssize_t __real_pwrite(int, const void *, size_t, off_t);
 extern "C" ssize_t __wrap_pread(int fd, void *data, size_t count, off_t offset) {
+    if (is("service") && !verify_seen && stage(fd)) {
+        verify_seen = true;
+        progress_entered.release();
+        assert(progress_continue.try_acquire_for(std::chrono::seconds(10)));
+    }
     if (replace_on_journal_read) {
         struct stat opened{};
         assert(fstat(fd, &opened) == 0);
@@ -85,6 +93,10 @@ extern "C" int __wrap_ftruncate(int fd,off_t n){if(armed){struct stat s{};assert
 extern "C" ssize_t __wrap_pwrite(int fd,const void* data,size_t n,off_t at){
  const auto r=__real_pwrite(fd,data,n,at);
  if(armed&&stage(fd)&&!write_seen){write_seen=true;
+  if (is("service") || is("service-cancel")) {
+      progress_entered.release();
+      assert(progress_continue.try_acquire_for(std::chrono::seconds(10)));
+  }
   if (is("destination-moved-during-write")) replace_destination();
   if(is("hint-replaced")){const auto hint=base_path+"/dest/.image.ckarchive.cktmp-1";const auto saved=base_path+"/dest/saved";assert(rename(hint.c_str(),saved.c_str())==0);int x=open(hint.c_str(),O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC,0600);assert(x>=0&&write(x,"replacement",11)==11&&close(x)==0);}
   if(is("cancel-in-write")||is("cancel-close")||is("cancel-close-oom")){assert(cancel_source);cancel_source->request_stop();}
@@ -260,13 +272,40 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
   reviewed_write_refuses_changed_admission();
   return 0;
  }
- const bool service_mode=is("service")||is("service-legacy-root")||is("service-oom");
+ const bool service_mode=is("service")||is("service-cancel")||is("service-legacy-root")||is("service-oom");
  if(service_mode){if(is("service-oom"))mode="upstream-oom-close";
   FilesVolumeArchiveService worker;FilesVolumeArchiveRequest request{source(),address(base_path+"/dest"),"image.ckarchive",FilesVolumeArchiveConsistency::Live,1,[](auto){return Observation<FilesVolumeArchiveDocument>::available(document());},address(base_path+"/private"),id(),{},[](const auto&,const auto&,bool)->Observation<std::unique_ptr<OperationJournalFile>>{std::abort();},{}};
   if(!is("service-legacy-root"))request.prepared_journal_root=root;
   auto submitted=worker.request(std::move(request));assert(submitted.state==FilesVolumeArchiveSubmission::Accepted);
-  std::optional<FilesVolumeArchiveReply> reply;for(unsigned i=0;i<30000&&!reply;++i){reply=worker.take();if(!reply)std::this_thread::sleep_for(std::chrono::milliseconds(1));}assert(reply);worker.request_stop();worker.join();
+  if (is("service") || is("service-cancel")) {
+      using Phase = FilesVolumeArchivePhase;
+      assert(progress_entered.try_acquire_for(std::chrono::seconds(10)));
+      assert(!worker.progress({}));
+      const auto writing = worker.progress(submitted.ticket);
+      assert(writing && writing->phase == Phase::Writing && writing->completed_bytes == 0);
+      if (is("service-cancel")) {
+          assert(worker.cancel(submitted.ticket));
+          const auto cancelled = worker.progress(submitted.ticket);
+          assert(cancelled && cancelled->phase == Phase::CancelRequested && !worker.cancel(submitted.ticket));
+      } else {
+          progress_continue.release();
+          assert(progress_entered.try_acquire_for(std::chrono::seconds(10)));
+          const auto verifying = worker.progress(submitted.ticket);
+          assert(verifying && verifying->phase == Phase::Verifying && verifying->completed_bytes == 0);
+          // Only the read-back includes the sparse gap of the fixture's file.
+          assert(verifying->total_bytes == writing->total_bytes + (2 * 1024 * 1024 - 8));
+      }
+      progress_continue.release();
+  }
+  std::optional<FilesVolumeArchiveReply> reply;for(unsigned i=0;i<30000&&!reply;++i){reply=worker.take();if(!reply)std::this_thread::sleep_for(std::chrono::milliseconds(1));}assert(reply);
+  assert(!worker.progress(submitted.ticket));
+  worker.request_stop();worker.join();
   if(is("upstream-oom-close")){assert(reply->state==FilesVolumeArchiveState::WorkerFault&&reply->failure_pod&&reply->failure_pod->domain==ErrorDomain::Posix&&reply->failure_pod->code==EIO&&close_fault);}
+  else if (is("service-cancel")) {
+      assert(reply->state == FilesVolumeArchiveState::Cancelled && !reply->result);
+      struct stat image{};
+      assert(lstat((base_path + "/dest/image.ckarchive").c_str(), &image) != 0 && errno == ENOENT);
+  }
   else {assert(reply->state==FilesVolumeArchiveState::Complete&&reply->result&&reply->result->publication_confirmed);}
  }else{
   FilesVolumeArchiveWriteRequest request{document(),base_path+"/dest","image.ckarchive",1,{},{},{},{},{},{},{}};request.destination_owner=dest;request.prepared_journal_root=root;request.native_journal_name=name(journal().c_str());request.native_journal_id=id();

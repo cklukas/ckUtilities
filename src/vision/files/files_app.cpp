@@ -405,6 +405,7 @@ struct FilesApp::State {
     bool operation_planning_cancelling = false;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
     std::optional<FilesVolumeArchivePlanningTicket> volume_archive_planning_request;
+    bool volume_archive_planning_cancelling = false;
     std::optional<FilesVolumeArchiveTicket> volume_archive_execution_request;
     bool volume_archive_recovery_request = false;
     std::optional<FilesVolumeArchiveRecoveryScan> volume_archive_recovery_scan;
@@ -1119,10 +1120,16 @@ struct FilesApp::State {
                 return operation_planning_cancelling ? unavailable("Cancellation already requested")
                                                      : FilesCommandAvailability::available();
             if (volume_archive_planning_request && volume_archive_service)
-                return FilesCommandAvailability::available();
+                return volume_archive_planning_cancelling ? unavailable("Cancellation already requested")
+                                                          : FilesCommandAvailability::available();
             if (modal_pending())
                 return unavailable("Cancel unavailable: a dialog is open");
-            if (operation_execution_request || volume_archive_execution_request ||
+            if (volume_archive_execution_request && volume_archive_service) {
+                const auto progress = volume_archive_service->progress(*volume_archive_execution_request);
+                return progress && progress->phase == FilesVolumeArchivePhase::CancelRequested
+                    ? unavailable("Cancellation already requested") : FilesCommandAvailability::available();
+            }
+            if (operation_execution_request ||
                 pending(panes[active]) || volume_pending(active) || panes[active].volume_view)
                 return FilesCommandAvailability::available();
             return unavailable("Cancel unavailable: no activity is running");
@@ -1477,13 +1484,34 @@ struct FilesApp::State {
                !volume_pending(destination_pane) && destination.active &&
                destination.model.current() && services[destination_pane]->running();
     }
+    std::string volume_archive_status() const {
+        const auto progress = volume_archive_service->progress(*volume_archive_execution_request);
+        if (!progress)
+            return "Preparing archive...";
+        using Phase = FilesVolumeArchivePhase;
+        switch (progress->phase) {
+            case Phase::Writing:
+            case Phase::Verifying:
+                return std::string(progress->phase == Phase::Writing ? "Writing archive " : "Verifying archive ") +
+                    volume_bytes(progress->completed_bytes) + " / " + volume_bytes(progress->total_bytes);
+            case Phase::Publishing:
+                return "Publishing archive...";
+            case Phase::Closing:
+                return "Closing archive...";
+            case Phase::CancelRequested:
+                return "Archive cancellation requested...";
+            case Phase::Preparing:
+                return "Preparing archive...";
+        }
+        return "Creating volume archive...";
+    }
     std::string status(std::size_t i) const {
         const auto &p = panes.at(i);
         std::string text;
         if (volume_archive_planning_request)
-            text = "Planning volume archive...";
+            text = volume_archive_planning_cancelling ? "Cancelling archive planning..." : "Planning volume archive...";
         else if (volume_archive_execution_request)
-            text = "Creating volume archive...";
+            text = volume_archive_status();
         else if (operation_planning_request) {
             if (operation_planning_cancelling)
                 text = "Cancelling operation planning...";
@@ -2630,6 +2658,7 @@ struct FilesApp::State {
         }
         volume_archive_origin = std::move(origin);
         volume_archive_planning_request = submitted.ticket;
+        volume_archive_planning_cancelling = false;
         panes[active].error.clear();
         panes[destination_pane].archive_notice.clear();
         watch();
@@ -4245,7 +4274,8 @@ struct FilesApp::State {
             return;
         }
         if (!closing && volume_archive_planning_request && volume_archive_service) {
-            volume_archive_service->cancel_plan(*volume_archive_planning_request);
+            if (!volume_archive_planning_cancelling && volume_archive_service->cancel_plan(*volume_archive_planning_request))
+                volume_archive_planning_cancelling = true;
             labels();
             return;
         }

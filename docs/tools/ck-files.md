@@ -75,6 +75,10 @@ clipboard.
   shows the exact path and explanation for the selected row. **Acknowledge**
   records its acceptance, and **Back** returns to the archive summary. Files
   requires acknowledgement of every listed loss before creation.
+  During creation, the pane footer shows the bytes written and then the
+  bytes read back for verification. Verification covers the entire logical
+  archive, including its sparse holes. **Esc** requests cancellation. The
+  footer reports the outcome after the worker finishes.
   Live archive creation has passed native Linux ext4, XFS, and Btrfs
   fixtures. On macOS, volume browsing is available and archive Copy stays
   disabled pending support for exact archive publication.

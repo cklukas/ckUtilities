@@ -68,7 +68,7 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     -Wl,--wrap=ftruncate -Wl,--wrap=pwrite -Wl,--wrap=fsync -Wl,--wrap=close -Wl,--wrap=linkat -Wl,--wrap=pread)
   foreach(archive_case roundtrip occupied hint-replaced cancel-in-write cancel-close
       cancel-close-oom cancel-after-publish close-oom first-enospc-close-oom
-      upstream-oom-close post-link-flush service service-legacy-root service-oom no-owner
+      upstream-oom-close post-link-flush service service-cancel service-legacy-root service-oom no-owner
       destination-moved-during-write destination-moved-at-publish source-mount-changed-during-write
       source-edited-during-capture source-directory-changed-during-capture
       recovery-root-replaced recovery-journal-appeared-during-review)

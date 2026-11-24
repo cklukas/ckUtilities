@@ -1145,7 +1145,8 @@ Observation<bool> revalidate_archive_source(const FilesVolumeArchiveSourceRevali
 
 Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     auto &request, std::stop_token stop_token,
-    const FilesVolumeArchiveSourceRevalidation *source, FilesVolumeArchivePayload *payload = nullptr) {
+    const FilesVolumeArchiveSourceRevalidation *source, FilesVolumeArchivePayload *payload = nullptr,
+    const std::function<void(FilesVolumeArchiveProgress)> &report_progress = {}) {
     using R=Observation<FilesVolumeArchiveWriteResult>;
     if(!valid_request(request))return R::unavailable(ObservationState::Unsupported,error(AdapterError::PlanInvalid,"volume_archive.request"));
     if(!request.destination_owner||!request.prepared_journal_root||!request.native_journal_name||request.append_journal||request.append_journal_evidence)
@@ -1223,10 +1224,47 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     if(!began.value())return R::unavailable(began.state(),began.unavailable_detail()->error);
     auto job = std::move(began).take_value();
     using Phase = ck::files::NativeArchivePhase;
+    using DisplayPhase = FilesVolumeArchivePhase;
     auto progress = job->progress();
+    std::optional<DisplayPhase> last_phase;
+    std::chrono::steady_clock::time_point next_sample;
     std::optional<UnavailableObservation> stopped_by_review;
     while (progress.phase != Phase::Complete && progress.phase != Phase::Cancelled &&
            progress.phase != Phase::NeedsReconciliation) {
+        if (report_progress) {
+            FilesVolumeArchiveProgress sample{DisplayPhase::Preparing};
+            switch (progress.phase) {
+                case Phase::Write:
+                case Phase::ReadStream:
+                case Phase::WriteStream:
+                case Phase::Flush:
+                case Phase::Layout:
+                    // Writes skip holes. Verification reads the full logical image.
+                    sample = {DisplayPhase::Writing, progress.written_bytes, data_offset + data_bytes};
+                    break;
+                case Phase::Verify:
+                    sample = {DisplayPhase::Verifying, progress.verified_bytes, logical_size};
+                    break;
+                case Phase::CommitIntent:
+                case Phase::Publish:
+                    sample.phase = DisplayPhase::Publishing;
+                    break;
+                case Phase::Committed:
+                case Phase::CloseFile:
+                case Phase::CompleteJournal:
+                case Phase::Drain:
+                    sample.phase = DisplayPhase::Closing;
+                    break;
+                default:
+                    break;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (last_phase != sample.phase || now >= next_sample) {
+                report_progress(sample);
+                last_phase = sample.phase;
+                next_sample = now + std::chrono::milliseconds(100);
+            }
+        }
         // Check before the durable intent and again after its flush. The
         // native publish is still relative to the held directory if the
         // requested route changes during the final system call.
@@ -1456,6 +1494,7 @@ struct FilesVolumeArchiveService::State final {
     std::optional<Job> pending;
     std::optional<FilesVolumeArchivePlanningReply> plan_reply;
     std::optional<FilesVolumeArchiveReply> reply;
+    std::optional<FilesVolumeArchiveProgress> progress_sample;
     FilesVolumeArchiveReview::Pointer ready_review;
     FilesVolumeArchivePlanningTicket latest_plan;
     FilesVolumeArchiveTicket latest;
@@ -1490,6 +1529,7 @@ struct FilesVolumeArchiveService::State final {
         if (stopping || value.request != latest)
             return;
         reply = std::move(value);
+        progress_sample.reset();
         busy = false;
         signal();
     }
@@ -1687,7 +1727,12 @@ struct FilesVolumeArchiveService::State final {
                     .prepared_journal_root=root, .native_journal_name=*journal_name,
                     .native_journal_id=value.journal_id, .journal_limits=value.journal_limits};
                 auto *payload = bindings.capture ? &bindings.capture->payload : nullptr;
-                return write_bound_volume_archive(request, token, source, payload);
+                return write_bound_volume_archive(request, token, source, payload,
+                    [this, &ticket](FilesVolumeArchiveProgress sample) {
+                        std::lock_guard lock(mutex);
+                        if (ticket == latest && !stop.stop_requested())
+                            progress_sample = sample;
+                    });
             };
             auto written=invoke();scope.reset();bindings = {};
             if(!written.value()){cache_error(*written.unavailable_detail());return;}
@@ -1887,10 +1932,18 @@ FilesVolumeArchiveSubmitted FilesVolumeArchiveService::request(FilesVolumeArchiv
 }
 bool FilesVolumeArchiveService::cancel(const FilesVolumeArchiveTicket &request) {
     std::lock_guard lock(state_->mutex);
-    if (!request.valid() || request != state_->latest || (!state_->busy && !state_->pending))
+    if (!request.valid() || request != state_->latest || state_->stopping ||
+        (!state_->busy && !state_->pending) || !state_->stop.request_stop())
         return false;
-    state_->stop.request_stop();
+    state_->progress_sample = FilesVolumeArchiveProgress{FilesVolumeArchivePhase::CancelRequested};
     return true;
+}
+std::optional<FilesVolumeArchiveProgress> FilesVolumeArchiveService::progress(
+    const FilesVolumeArchiveTicket &request) const {
+    std::lock_guard lock(state_->mutex);
+    if (!request.valid() || request != state_->latest || state_->stopping)
+        return std::nullopt;
+    return state_->progress_sample;
 }
 std::optional<FilesVolumeArchiveReply> FilesVolumeArchiveService::take() {
     std::lock_guard lock(state_->mutex);

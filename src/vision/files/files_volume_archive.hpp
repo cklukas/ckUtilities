@@ -520,6 +520,14 @@ struct FilesVolumeArchiveSubmitted final {
     FilesVolumeArchiveTicket ticket;
 };
 
+enum class FilesVolumeArchivePhase { Preparing, Writing, Verifying, Publishing, Closing, CancelRequested };
+
+struct FilesVolumeArchiveProgress final {
+    FilesVolumeArchivePhase phase;
+    std::uint64_t completed_bytes = 0;
+    std::uint64_t total_bytes = 0;
+};
+
 struct FilesVolumeArchiveReply final {
     FilesVolumeArchiveTicket request;
     FilesVolumeArchiveState state = FilesVolumeArchiveState::Failed;
@@ -547,6 +555,8 @@ class FilesVolumeArchiveService final {
 
     FilesVolumeArchiveSubmitted request(FilesVolumeArchiveRequest request);
     bool cancel(const FilesVolumeArchiveTicket &request);
+    // Latest sampled progress for this request. The terminal reply is authoritative.
+    std::optional<FilesVolumeArchiveProgress> progress(const FilesVolumeArchiveTicket &request) const;
     std::optional<FilesVolumeArchiveReply> take();
     void request_stop() noexcept;
     void join();
