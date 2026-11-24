@@ -1383,7 +1383,7 @@ struct FilesApp::State {
             const auto &selection = panes[active].selection;
             if (selection.invalidated_refresh_marks)
                 return unavailable(std::string(move ? "Move" : "Copy") +
-                                   " unavailable: review the marks lost during refresh");
+                                   " unavailable: change or clear marks after refresh");
             if (selection.invalidated_refresh_focus && (!selection.marks || !selection.marks->total))
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: choose Use current row");
             if (selection.state == ck::files::PaneSourcesState::HiddenMarksNeedReview)
@@ -1523,8 +1523,9 @@ struct FilesApp::State {
                     text += " | ";
                 text += "Marks lost on refresh: " + std::to_string(p.selection.invalidated_refresh_marks);
             }
-            if (text.empty())
-                text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
+            if (!text.empty())
+                text += " | ";
+            text += "Last scan: " + std::to_string(p.model.row_count()) + " items";
         }
         if (p.active && (!p.model.current() || p.refresh_failed) && text.find("Stale") == text.npos)
             text += "; stale listing";
