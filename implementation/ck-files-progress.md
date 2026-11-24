@@ -31,6 +31,23 @@ preceding `4b48075` baseline passed 114 of 115 matching macOS ThreadSanitizer
 entries on the first run. The timed-out Files shard passed unchanged in
 7.19 seconds on rerun. Windows workstation and desktop-window gates are open.
 
+The `7ffc15f` checkpoint passed all 115 Files, keymap and shell entries
+under macOS ARM64 ThreadSanitizer, including the pane mount-state and writer
+refusal regressions. The independent consumer passed against the same
+instrumented ckVision 2.1 SDK. The log SHA-256 is
+`6dff05900de80a1b8d062a56c9c06b48765710f67aea8083d0836091cf66c6d6`.
+Hosted Linux passed 475 development and 475 Release test entries, both
+installed SDK consumer checks, and verification of the TGZ, DEB and RPM.
+[Hosted Linux job](https://github.com/cklukas/ckUtilities/actions/runs/45303672084/job/138142268900)
+
+The follow-up `bb0c441` was rebuilt and tested in a real Linux xterm window.
+The two read-only refusals and the writable sparse round trip passed again.
+After the remount, the verified process displayed the reason once and left
+the target and journal directory untouched. The current Release executable
+SHA-256 is `1b39138103a5af01d76413b075cc2bcc3fe53b04da868838420d2bedac6b2049`.
+The xterm remount receipt SHA-256 is
+`49ef199119f6b3c37ae7a82622ba760a038ef37d5b9d66e4ef10d531bf52b92e`.
+
 ## 2026-11-24 — ckVision 2.1 qualification checkpoint
 
 Frontend `6e1607e19992628c76c5d3433ac522cdd68838b4` uses ckVision
@@ -53,6 +70,15 @@ Frontend `6e1607e19992628c76c5d3433ac522cdd68838b4` uses ckVision
 
 Windows workstation testing is postponed while the machine is powered off.
 The native macOS PTY checks passed, and desktop-window acceptance remains open.
+
+The documentation-only successor `4b48075` also passed 159 Files, keymap
+and shell entries under Linux ARM64 ASan/UBSan, including 44 archive entries.
+The first run passed 158 entries. The marked-batch Copy test hit its own
+completion deadline while the second item was still pending. The unchanged
+shard passed on a fresh ext4 fixture, then the complete unchanged suite
+passed on another fresh ext4 fixture with its original deadlines. The
+independent installed SDK consumer passed. The complete repeat log SHA-256
+is `4a6dc4428845e6f47b1c6ddcd0ebca00360128d3221d29365eb280087417cb15`.
 
 ## 2026-11-24 — Native menu shortcuts and volume Properties
 
