@@ -593,3 +593,158 @@ CK_TEST(files_operation_recovery_preserves_raw_utf16_journal_suffix_as_error_ite
     CK_CHECK(after == before);
 }
 #endif
+
+CK_TEST(files_operation_recovery_overlap_detects_unfinished_and_retained_source_identities_and_allows_disjoint) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-overlap",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto src_a = scratch.path() / "src-a";
+    const auto dst_a = scratch.path() / "dst-a";
+    const auto src_b = scratch.path() / "src-b";
+    const auto dst_b = scratch.path() / "dst-b";
+    const auto journals = scratch.path() / "journals";
+    for (const auto &dir : {src_a, dst_a, src_b, dst_b, journals}) {
+        CK_CHECK(ck::io::create_directories(dir));
+#if !defined(_WIN32)
+        std::filesystem::permissions(dir, std::filesystem::perms::owner_all,
+                                     std::filesystem::perm_options::replace);
+#endif
+    }
+    CK_CHECK(ck::io::write_file(src_a / "alpha.txt", "ALPHA"));
+    CK_CHECK(ck::io::write_file(src_b / "beta.txt", "BETA"));
+
+    const auto root = address(journals);
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+
+    NativeFileSystem fs;
+    auto open_dir = [&](const std::filesystem::path &path) {
+        auto opened = fs.open_native_directory(address(path));
+        if (!opened.value())
+            throw std::runtime_error("cannot open overlap test directory");
+        return std::move(opened).take_value();
+    };
+    auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+    auto dir_src_a = open_dir(src_a);
+    auto dir_dst_a = open_dir(dst_a);
+    auto dir_src_b = open_dir(src_b);
+    auto dir_dst_b = open_dir(dst_b);
+    auto file_alpha = dir_src_a->open_child(leaf("alpha.txt", u"alpha.txt"), EntryAccess::MetadataOnly);
+    auto file_beta = dir_src_b->open_child(leaf("beta.txt", u"beta.txt"), EntryAccess::MetadataOnly);
+    CK_CHECK(file_alpha.value() && file_beta.value());
+    if (!file_alpha.value() || !file_beta.value())
+        return;
+    const auto id_src_a = *dir_src_a->identity().value();
+    const auto id_dst_a = *dir_dst_a->identity().value();
+    const auto id_src_b = *dir_src_b->identity().value();
+    const auto id_dst_b = *dir_dst_b->identity().value();
+    const auto id_alpha = *(*file_alpha.value())->inspect_basic().value()->identity.value();
+    const auto id_beta = *(*file_beta.value())->inspect_basic().value()->identity.value();
+
+    auto make_inventory = [&](const std::filesystem::path &path, const ObjectIdentity &id) {
+        FrozenInventoryBuilder builder(InventoryMountPolicy::DirectObjects, InventoryLinkPolicy::PreserveLinks);
+        FrozenInventoryEntry entry{
+            address(path), id, ObjectKind::RegularFile, {}, 5, LinkTraversalEvidence::NotLink, std::nullopt, {}};
+        CK_CHECK(builder.add(std::move(entry)));
+        CK_CHECK(builder.seal());
+        auto frozen = builder.completed();
+        if (!frozen.value())
+            throw std::runtime_error("cannot freeze overlap test inventory");
+        return std::move(frozen).take_value();
+    };
+    const auto inv_alpha = make_inventory(src_a / "alpha.txt", id_alpha);
+    const auto inv_beta = make_inventory(src_b / "beta.txt", id_beta);
+
+    auto write_journal = [&](const NativeName &name, OperationJournalId id, FileOperation op,
+                             std::initializer_list<OperationJournalState> states,
+                             const NativeOperationRecoveryEvidence &ev) {
+        auto created = OperationJournal::create(op, id, {4, 32, 4096});
+        CK_CHECK(created.value());
+        auto journal = std::move(created).take_value();
+        auto encoded = encode_native_operation_recovery_evidence(ev);
+        CK_CHECK(encoded.value());
+        auto opened = open_native_operation_journal_file(root, name, true);
+        CK_CHECK(opened.value());
+        auto file = std::move(opened).take_value();
+        std::uint64_t seq = 1;
+        for (const auto st : states) {
+            const auto payload = st == OperationJournalState::Planned ? std::vector<std::byte>{} : *encoded.value();
+            CK_CHECK(append_operation_journal_file(*file, *journal, {seq++, 0, st, payload}).value());
+        }
+        CK_CHECK(file->finish_io().value());
+    };
+
+    NativeOperationRecoveryEvidence unfinished_ev{
+        leaf(".ck-staging-1", u".ck-staging-1"),
+        leaf("alpha.txt", u"alpha.txt"),
+        *NativeDurableIdentity::from_live(id_src_a),
+        *NativeDurableIdentity::from_live(id_alpha),
+        *NativeDurableIdentity::from_live(id_dst_a),
+        std::nullopt,
+        address(dst_a),
+        std::nullopt,
+        std::nullopt,
+        StagingNamespace::Named,
+        leaf("alpha.txt", u"alpha.txt"),
+    };
+    const auto unfinished_name = leaf(".ck-move-journal-overlap-1", u".ck-move-journal-overlap-1");
+    write_journal(unfinished_name, journal_id(), FileOperation::Move,
+                  {OperationJournalState::Planned, OperationJournalState::Prepared, OperationJournalState::Copied,
+                   OperationJournalState::Verified, OperationJournalState::CommitIntended,
+                   OperationJournalState::DestinationCommitted},
+                  unfinished_ev);
+
+    // Same source and destination -> blocked.
+    const auto both_hit = check_operation_recovery_overlap(root, *inv_alpha, id_dst_a, id_src_a);
+    CK_CHECK(both_hit.value() && both_hit.value()->has_conflict());
+    if (both_hit.value() && !both_hit.value()->conflicts.empty())
+        CK_CHECK(both_hit.value()->conflicts.front().kind == FilesOperationRecoveryOverlapKind::UnfinishedTransfer);
+
+    // Rename alpha.txt on disk (new display path, same native inode/FileID) -> still blocked.
+    std::move(file_alpha).take_value().reset();
+    std::filesystem::rename(src_a / "alpha.txt", src_a / "alpha-renamed.txt");
+    auto renamed_handle = dir_src_a->open_child(leaf("alpha-renamed.txt", u"alpha-renamed.txt"), EntryAccess::MetadataOnly);
+    CK_CHECK(renamed_handle.value());
+    if (renamed_handle.value()) {
+        const auto id_renamed = *(*renamed_handle.value())->inspect_basic().value()->identity.value();
+        const auto inv_renamed = make_inventory(src_a / "alpha-renamed.txt", id_renamed);
+        const auto renamed_hit = check_operation_recovery_overlap(root, *inv_renamed, id_dst_b, id_src_a);
+        CK_CHECK(renamed_hit.value() && renamed_hit.value()->has_conflict());
+    }
+
+    // Different source into the same unfinished destination -> blocked.
+    const auto dest_hit = check_operation_recovery_overlap(root, *inv_beta, id_dst_a, id_src_b);
+    CK_CHECK(dest_hit.value() && dest_hit.value()->has_conflict());
+
+    // Completely disjoint source and destination -> allowed.
+    const auto disjoint = check_operation_recovery_overlap(root, *inv_beta, id_dst_b, id_src_b);
+    CK_CHECK(disjoint.value() && !disjoint.value()->has_conflict());
+
+    // Replace unfinished journal with terminal RetainedSource move journal.
+    std::filesystem::remove(journals / ".ck-move-journal-overlap-1");
+    OperationJournalId retained_id = journal_id();
+    retained_id.bytes[1] = std::byte{0x02};
+    write_journal(leaf(".ck-move-journal-retained-1", u".ck-move-journal-retained-1"), retained_id, FileOperation::Move,
+                  {OperationJournalState::Planned, OperationJournalState::Prepared, OperationJournalState::Copied,
+                   OperationJournalState::Verified, OperationJournalState::CommitIntended,
+                   OperationJournalState::DestinationCommitted, OperationJournalState::RetainedSource},
+                  unfinished_ev);
+
+    // Resubmitting same source to same destination -> blocked as RetainedSourceRepeat.
+    const auto retained_repeat = check_operation_recovery_overlap(root, *inv_alpha, id_dst_a, id_src_a);
+    CK_CHECK(retained_repeat.value() && retained_repeat.value()->has_retained_source_repeat());
+    // Copying retained source to a DIFFERENT destination -> allowed.
+    const auto retained_other_dest = check_operation_recovery_overlap(root, *inv_alpha, id_dst_b, id_src_a);
+    CK_CHECK(retained_other_dest.value() && !retained_other_dest.value()->has_conflict());
+
+    // Malformed journal fails closed even for completely disjoint transfer.
+    CK_CHECK(write_fixture_journal_bytes(root, leaf(".ck-copy-journal-corrupt", u".ck-copy-journal-corrupt"), "torn"));
+    const auto corrupt_hit = check_operation_recovery_overlap(root, *inv_beta, id_dst_b, id_src_b);
+    CK_CHECK(corrupt_hit.value() && corrupt_hit.value()->has_untrusted_journal());
+}

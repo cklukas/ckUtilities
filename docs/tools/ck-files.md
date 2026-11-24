@@ -182,7 +182,11 @@ clipboard.
   for recovered journals: cleanup requires the originating copy worker's live
   ownership of the created staging object. Reopened journal IDs and names do
   not provide that authority. No resume, retry, replacement, publication, or source retirement
-  is offered without a later qualified worker boundary. Ordinary-copy journals
+  is offered without a later qualified worker boundary. When a Copy or Move
+  overlaps an unfinished, retained-source, or untrusted operation journal by
+  native source or destination identity—even after a rename—planning and
+  execution hold the transfer and open **Reconciliation required** instead of
+  bypassing the unresolved record. Ordinary-copy journals
   also retain the independently verified whole-file SHA-256 receipt at the
   Copied and Verified boundaries; it is used for future reconciliation only,
   never as pathname-based authority. A worker-only read-only verifier can

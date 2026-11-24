@@ -126,6 +126,198 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
         "operation_recovery.directory_finish_io");
 }
 
+bool FilesOperationRecoveryOverlapReport::has_untrusted_journal() const noexcept {
+    return std::any_of(conflicts.begin(), conflicts.end(), [](const auto &entry) {
+        return entry.kind == FilesOperationRecoveryOverlapKind::UntrustedJournal ||
+               entry.kind == FilesOperationRecoveryOverlapKind::UnqualifiedJournal;
+    });
+}
+
+bool FilesOperationRecoveryOverlapReport::has_retained_source_repeat() const noexcept {
+    return std::any_of(conflicts.begin(), conflicts.end(), [](const auto &entry) {
+        return entry.kind == FilesOperationRecoveryOverlapKind::RetainedSourceRepeat;
+    });
+}
+
+FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
+    const FilesOperationRecoveryScan &scan, const ck::files::FrozenInventory &inventory,
+    std::optional<ck::files::ObjectIdentity> destination,
+    std::optional<ck::files::ObjectIdentity> source_parent) {
+    using namespace ck::files;
+    constexpr std::size_t max_reported_conflicts = 256;
+    FilesOperationRecoveryOverlapReport report;
+    const auto matches_any_entry = [&](const NativeDurableIdentity &id) noexcept {
+        return std::any_of(inventory.entries().begin(), inventory.entries().end(), [&](const auto &entry) noexcept {
+            return id.matches_live(entry.identity);
+        });
+    };
+    const auto matches_opt = [](const NativeDurableIdentity &id,
+                                const std::optional<ObjectIdentity> &live) noexcept {
+        return live.has_value() && id.matches_live(*live);
+    };
+    const auto add_conflict = [&](FilesOperationRecoveryOverlap conflict) {
+        if (report.conflicts.size() < max_reported_conflicts)
+            report.conflicts.push_back(std::move(conflict));
+    };
+
+    for (const auto &item : scan.journals) {
+        if (report.conflicts.size() >= max_reported_conflicts)
+            break;
+        if (item.error || !item.report) {
+            FilesOperationRecoveryOverlap conflict;
+            conflict.kind = FilesOperationRecoveryOverlapKind::UntrustedJournal;
+            conflict.journal_name = item.display_name;
+            conflict.reason = item.error
+                ? "unreadable or malformed journal (" + item.error->error.operation + ") cannot be excluded"
+                : "operation journal report is missing and cannot be excluded";
+            add_conflict(std::move(conflict));
+            continue;
+        }
+        const auto &inspection = item.report->inspection;
+        if (inspection.report.has_untrusted_tail || inspection.has_untrusted_evidence) {
+            FilesOperationRecoveryOverlap conflict;
+            conflict.kind = FilesOperationRecoveryOverlapKind::UntrustedJournal;
+            conflict.journal_name = item.display_name;
+            conflict.journal_id = item.report->journal_id;
+            conflict.reason = inspection.report.has_untrusted_tail
+                ? "journal has an untrusted tail and requires reconciliation"
+                : "journal has untrusted native evidence and requires reconciliation";
+            add_conflict(std::move(conflict));
+            continue;
+        }
+        auto artifact = inspection.artifacts.begin();
+        for (const auto &recovery : inspection.report.items) {
+            if (report.conflicts.size() >= max_reported_conflicts)
+                break;
+            while (artifact != inspection.artifacts.end() && artifact->item < recovery.item)
+                ++artifact;
+            const NativeOperationRecoveryArtifact *matched_artifact =
+                (artifact != inspection.artifacts.end() && artifact->item == recovery.item) ? &*artifact : nullptr;
+
+            if (recovery.requires_reconciliation) {
+                if (!matched_artifact || (!matched_artifact->evidence && !matched_artifact->deletion_evidence)) {
+                    FilesOperationRecoveryOverlap conflict;
+                    conflict.kind = FilesOperationRecoveryOverlapKind::UnqualifiedJournal;
+                    conflict.journal_name = item.display_name;
+                    conflict.journal_id = item.report->journal_id;
+                    conflict.state = recovery.state;
+                    conflict.action = recovery.action;
+                    conflict.reason = "unfinished journal lacks decoded native identities and cannot be excluded";
+                    add_conflict(std::move(conflict));
+                    continue;
+                }
+                if (matched_artifact->deletion_evidence) {
+                    const auto &del = *matched_artifact->deletion_evidence;
+                    const bool overlaps =
+                        matches_any_entry(del.source_identity) || matches_opt(del.source_identity, destination) ||
+                        matches_opt(del.source_identity, source_parent) ||
+                        matches_any_entry(del.source_parent_identity) ||
+                        matches_opt(del.source_parent_identity, destination);
+                    if (overlaps) {
+                        FilesOperationRecoveryOverlap conflict;
+                        conflict.kind = FilesOperationRecoveryOverlapKind::UnfinishedDeletion;
+                        conflict.journal_name = item.display_name;
+                        conflict.journal_id = item.report->journal_id;
+                        conflict.state = recovery.state;
+                        conflict.action = recovery.action;
+                        conflict.source_name = del.source_name.display_name();
+                        conflict.reason = "unfinished deletion overlaps source or destination identity";
+                        add_conflict(std::move(conflict));
+                    }
+                    continue;
+                }
+                const auto &ev = *matched_artifact->evidence;
+                const bool same_source = matches_any_entry(ev.source_identity);
+                const bool same_destination = matches_opt(ev.destination_identity, destination);
+                const bool source_hits_old_dest = matches_any_entry(ev.destination_identity);
+                const bool dest_hits_old_source = matches_opt(ev.source_identity, destination);
+                const bool dest_hits_old_source_parent = matches_opt(ev.source_parent_identity, destination);
+                const bool same_parent_and_dest =
+                    matches_opt(ev.source_parent_identity, source_parent) && same_destination;
+                const bool hits_published = ev.published_identity &&
+                    (matches_any_entry(*ev.published_identity) || matches_opt(*ev.published_identity, destination));
+                const bool hits_staging = ev.staging_identity &&
+                    (matches_any_entry(*ev.staging_identity) || matches_opt(*ev.staging_identity, destination));
+                if (same_source || same_destination || source_hits_old_dest || dest_hits_old_source ||
+                    dest_hits_old_source_parent || same_parent_and_dest || hits_published || hits_staging) {
+                    FilesOperationRecoveryOverlap conflict;
+                    conflict.kind = FilesOperationRecoveryOverlapKind::UnfinishedTransfer;
+                    conflict.journal_name = item.display_name;
+                    conflict.journal_id = item.report->journal_id;
+                    conflict.state = recovery.state;
+                    conflict.action = recovery.action;
+                    if (ev.source_name)
+                        conflict.source_name = ev.source_name->display_name();
+                    if (ev.destination_name.is_valid())
+                        conflict.destination_name = ev.destination_name.display_name();
+                    if (ev.destination_address)
+                        conflict.destination_address = ev.destination_address->display_text();
+                    if (same_source && same_destination)
+                        conflict.reason = "unfinished transfer matches both source and destination identities";
+                    else if (same_parent_and_dest)
+                        conflict.reason = "unfinished transfer matches source folder and destination identities";
+                    else if (same_source)
+                        conflict.reason = "unfinished transfer matches a selected source identity";
+                    else if (same_destination)
+                        conflict.reason = "unfinished transfer matches the destination folder identity";
+                    else if (hits_published)
+                        conflict.reason = "unfinished transfer matches a previously published object identity";
+                    else if (hits_staging)
+                        conflict.reason = "unfinished transfer matches an unpublished staging object identity";
+                    else if (source_hits_old_dest)
+                        conflict.reason = "selected source overlaps a previous transfer destination";
+                    else
+                        conflict.reason = "destination overlaps a previous transfer source";
+                    add_conflict(std::move(conflict));
+                }
+                continue;
+            }
+
+            if (item.kind == FilesOperationJournalKind::Transfer &&
+                recovery.state == OperationJournalState::RetainedSource && matched_artifact &&
+                matched_artifact->evidence) {
+                const auto &ev = *matched_artifact->evidence;
+                const bool same_source = matches_any_entry(ev.source_identity);
+                const bool same_destination = matches_opt(ev.destination_identity, destination);
+                const bool reverse_published = ev.published_identity && matches_any_entry(*ev.published_identity) &&
+                    matches_opt(ev.source_parent_identity, destination);
+                if ((same_source && same_destination) || reverse_published) {
+                    FilesOperationRecoveryOverlap conflict;
+                    conflict.kind = FilesOperationRecoveryOverlapKind::RetainedSourceRepeat;
+                    conflict.journal_name = item.display_name;
+                    conflict.journal_id = item.report->journal_id;
+                    conflict.state = recovery.state;
+                    conflict.action = recovery.action;
+                    if (ev.source_name)
+                        conflict.source_name = ev.source_name->display_name();
+                    if (ev.destination_name.is_valid())
+                        conflict.destination_name = ev.destination_name.display_name();
+                    if (ev.destination_address)
+                        conflict.destination_address = ev.destination_address->display_text();
+                    conflict.reason = reverse_published
+                        ? "previous move already committed this object from the destination folder and retained its source"
+                        : "previous move already committed the destination and retained the source; repeat requires reconciliation";
+                    add_conflict(std::move(conflict));
+                }
+            }
+        }
+    }
+    return report;
+}
+
+ck::files::Observation<FilesOperationRecoveryOverlapReport> check_operation_recovery_overlap(
+    const ck::files::NativeAbsolutePath &private_root, const ck::files::FrozenInventory &inventory,
+    std::optional<ck::files::ObjectIdentity> destination,
+    std::optional<ck::files::ObjectIdentity> source_parent, FilesOperationRecoveryLimits limits) {
+    auto scan = discover_operation_recovery(private_root, limits);
+    if (!scan.value())
+        return ck::files::Observation<FilesOperationRecoveryOverlapReport>::unavailable(
+            scan.state(), scan.unavailable_detail()->error);
+    return ck::files::Observation<FilesOperationRecoveryOverlapReport>::available(
+        assess_operation_recovery_overlap(*scan.value(), inventory, std::move(destination),
+                                          std::move(source_parent)));
+}
+
 struct FilesOperationRecoveryService::State final {
     std::function<void()> wake;
     std::mutex mutex;

@@ -382,6 +382,7 @@ struct FilesApp::State {
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool refreshing = false, refresh_failed = false, queued_refresh = false;
+        std::optional<ck::files::FileOperation> queued_copy;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
              deleting = false, trashing = false, creating_file = false, creating_hard_link = false,
              creating_symbolic_link = false;
@@ -528,6 +529,8 @@ struct FilesApp::State {
     std::weak_ptr<void> operation_recovery_lifetime;
     ckv::widgets::Window *operation_recovery_cleanup_window = nullptr;
     std::weak_ptr<void> operation_recovery_cleanup_lifetime;
+    ckv::widgets::Window *reconciliation_overlap_window = nullptr;
+    std::weak_ptr<void> reconciliation_overlap_lifetime;
     std::optional<VolumeRequest> volume_request;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId highlighted_menu_command = ckv::ui::kInvalidCommand;
@@ -994,6 +997,7 @@ struct FilesApp::State {
         volume_archive_recovery_cleanup_error.clear();
         operation_recovery_dialog.reset();
         operation_recovery_window = nullptr;
+        reconciliation_overlap_window = nullptr;
         volume_request.reset();
         operation_review_dialog.reset();
         tree_copy_dialog.reset();
@@ -1112,6 +1116,7 @@ struct FilesApp::State {
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
                archive_recovery_open() ||
+               reconciliation_overlap_open() ||
                (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) ||
                (operation_recovery_dialog && !operation_recovery_dialog->completed()) ||
                (operation_recovery_cleanup_dialog && !operation_recovery_cleanup_dialog->completed()) ||
@@ -1528,7 +1533,8 @@ struct FilesApp::State {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
     static bool pending(const Pane &p) {
-        return p.navigating || p.reading || p.changing || p.queued_view || p.queued_refresh || p.inspection || p.mutating;
+        return p.navigating || p.reading || p.changing || p.queued_view || p.queued_refresh ||
+               p.queued_copy.has_value() || p.inspection || p.mutating;
     }
     bool volume_pending(std::size_t i) const {
         return volume_request && volume_request->pane == i && !volume_request->retired &&
@@ -1608,7 +1614,11 @@ struct FilesApp::State {
             else
                 text = "No visible volumes";
         } else if (p.preparing_cursor)
-            text = p.queued_refresh ? "Reading current row for refresh..." : "Reading current row for view change...";
+            text = p.queued_refresh ? "Reading current row for refresh..."
+                 : p.queued_copy    ? (*p.queued_copy == ck::files::FileOperation::Move
+                                           ? "Reading current row for Move..."
+                                           : "Reading current row for Copy...")
+                                    : "Reading current row for view change...";
         else if (p.inspection)
             text = p.inspection->kind == FilesPaneReplyKind::PathText ? "Reading selected path..."
                    : p.inspection->kind == FilesPaneReplyKind::Link  ? "Reading link metadata..."
@@ -1618,7 +1628,10 @@ struct FilesApp::State {
                               : p.deleting ? "Deleting permanently..." : "Creating folder...";
         else if (p.changing)
             text = *p.changing == FilesPaneReplyKind::Focus   ? (p.queued_refresh ? "Preparing current row for refresh..."
-                                                                                : "Preparing current row for view change...")
+                                                                 : p.queued_copy  ? (*p.queued_copy == ck::files::FileOperation::Move
+                                                                                         ? "Preparing current row for Move..."
+                                                                                         : "Preparing current row for Copy...")
+                                                                                  : "Preparing current row for view change...")
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
                                                               : "Updating view...";
         else if (!p.error.empty())
@@ -1722,6 +1735,106 @@ struct FilesApp::State {
     }
     bool archive_recovery_open() const {
         return archive_recovery_window && !archive_recovery_lifetime.expired();
+    }
+    bool reconciliation_overlap_open() const {
+        return reconciliation_overlap_window && !reconciliation_overlap_lifetime.expired();
+    }
+    void show_reconciliation_overlap(ck::files::FileOperation operation,
+                                     const FilesOperationRecoveryOverlapReport &report) {
+        if (modal_pending() || !report.has_conflict())
+            return;
+        using namespace ckv::widgets;
+        const std::string op_label = operation == ck::files::FileOperation::Move ? "Move"
+            : operation == ck::files::FileOperation::Delete ? "Delete" : "Copy";
+        std::ostringstream detail;
+        detail << op_label << " is held because an existing operation journal overlaps this transfer.\n\n"
+               << "Original-job resume and linked retry require qualified reconciliation and cannot be "
+                  "bypassed by starting a new " << op_label << ". Source, destination, and existing "
+                  "journals were left unchanged.\n";
+        for (const auto &conflict : report.conflicts) {
+            detail << '\n';
+            switch (conflict.kind) {
+            case FilesOperationRecoveryOverlapKind::UnfinishedTransfer:
+                detail << "Type: unfinished transfer\n";
+                break;
+            case FilesOperationRecoveryOverlapKind::UnfinishedDeletion:
+                detail << "Type: unfinished deletion\n";
+                break;
+            case FilesOperationRecoveryOverlapKind::RetainedSourceRepeat:
+                detail << "Type: retained-source repeat\n";
+                break;
+            case FilesOperationRecoveryOverlapKind::UntrustedJournal:
+                detail << "Type: untrusted or unreadable journal\n";
+                break;
+            case FilesOperationRecoveryOverlapKind::UnqualifiedJournal:
+                detail << "Type: unfinished journal without native identities\n";
+                break;
+            }
+            if (!conflict.journal_name.empty())
+                detail << "Journal: " << conflict.journal_name << '\n';
+            if (conflict.state)
+                detail << "State: " << archive_recovery_state(*conflict.state);
+            if (conflict.action)
+                detail << (conflict.state ? "; action: " : "Action: ")
+                       << archive_recovery_action(*conflict.action);
+            if (conflict.state || conflict.action)
+                detail << '\n';
+            detail << "Reason: " << conflict.reason << '\n';
+            if (conflict.source_name)
+                detail << "Source: " << *conflict.source_name << '\n';
+            if (conflict.destination_name)
+                detail << "Destination: " << *conflict.destination_name << '\n';
+            if (conflict.destination_address)
+                detail << "Recorded folder: " << *conflict.destination_address << '\n';
+        }
+        auto owner = std::make_unique<Window>("Reconciliation required");
+        auto &desktop = shell->desktop();
+        const auto &roles = shell->roles();
+        const auto area = desktop.content_area();
+        const int width = std::min(90, area.width), height = std::min(22, area.height);
+        owner->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height});
+        owner->set_min_size({24, 6});
+        owner->set_resizable(true);
+        owner->set_content_margin(1, 1);
+        owner->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame, roles.dialog_background);
+        auto content = std::make_unique<ckv::ui::Column>();
+        auto reader = std::make_unique<TextView>();
+        reader->set_wrap_mode(WrapMode::Character);
+        reader->set_text(detail.str());
+        auto *initial = reader.get();
+        content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding});
+        auto buttons = std::make_unique<ckv::ui::Row>();
+        buttons->set_spacing(1);
+        auto *const raw_owner = owner.get();
+        const auto close = [raw_owner] { raw_owner->close(); };
+        owner->cancel_request = close;
+        if (operation_recovery_service) {
+            auto inspect = std::make_unique<Button>("&Inspect operation recovery");
+            inspect->on_press = [this, close, weak = std::weak_ptr<void>(lifetime)] {
+                close();
+                if (!weak.expired() && availability("ck.files.inspect_operation_recovery").enabled)
+                    show_operation_recovery();
+            };
+            buttons->add_item(std::move(inspect));
+        }
+        auto dismiss = std::make_unique<Button>("&Close");
+        dismiss->on_press = close;
+        buttons->add_item(std::move(dismiss));
+        content->add_item(std::move(buttons));
+        owner->set_content(std::move(content));
+        reconciliation_overlap_window = desktop.present_modal(WindowHandle{std::move(owner), initial}, application);
+        if (reconciliation_overlap_window) {
+            reconciliation_overlap_lifetime = reconciliation_overlap_window->lifetime_token();
+            reconciliation_overlap_window->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+                if (!weak.expired()) {
+                    reconciliation_overlap_window = nullptr;
+                    if (!modal_pending() && surfaces[active] && surfaces[active]->grid)
+                        application.set_focus(surfaces[active]->grid);
+                    labels();
+                }
+            };
+            labels();
+        }
     }
     void show_archive_recovery() {
         if (!availability("ck.files.inspect_archive_recovery").enabled ||
@@ -2164,6 +2277,7 @@ struct FilesApp::State {
         p.changing.reset();
         p.queued_view.reset();
         p.queued_refresh = false;
+        p.queued_copy.reset();
         p.inspection.reset();
         // Keep the volume rows visible and inert until the worker accepts a
         // replacement page. Failure or cancellation leaves the selection here.
@@ -2767,6 +2881,14 @@ struct FilesApp::State {
         }
         const auto source_pane = active;
         const auto destination_pane = 1 - active;
+        if (panes[source_pane].selection.origin != ck::files::PaneSourcesOrigin::Marks) {
+            if (auto prepared = prepare_current_row(source_pane)) {
+                if (*prepared)
+                    panes[source_pane].queued_copy = operation;
+                labels();
+                return;
+            }
+        }
         const auto source_navigation = panes[source_pane].navigation;
         const auto destination_navigation = panes[destination_pane].navigation;
         const auto source_stamp = panes[source_pane].stamp;
@@ -2788,6 +2910,7 @@ struct FilesApp::State {
         planning.evidence_limits.destination_batch.rows = max_items;
         planning.evidence_limits.source_target.rows = max_items;
         planning.projection_policy.require_unhandled_metadata_consent = true;
+        planning.journal_root = *operation_journal_root;
         const auto revalidate = [this, source_pane, destination_pane, source_navigation, destination_navigation](
                                     const ck::files::ConsentReceipt &receipt) {
             if (panes[source_pane].navigation != source_navigation || panes[destination_pane].navigation != destination_navigation ||
@@ -3484,6 +3607,7 @@ struct FilesApp::State {
         auto queued_view = std::move(p.queued_view);
         p.queued_view.reset();
         const bool queued_refresh = std::exchange(p.queued_refresh, false);
+        const auto queued_copy = std::exchange(p.queued_copy, std::nullopt);
         const bool cancelled = p.cancelling;
         p.stamp = reply.stamp;
         p.navigating = p.entering = p.homing = p.refreshing = false;
@@ -3540,20 +3664,26 @@ struct FilesApp::State {
                                      : "Location opened before cancellation completed";
                 p.change_error = true;
             } else if (cancelled && preparing_view) {
-                p.error = queued_refresh ? "Refresh cancelled before scanning" : "View change cancelled before application";
+                p.error = queued_refresh ? "Refresh cancelled before scanning"
+                        : queued_copy    ? (*queued_copy == ck::files::FileOperation::Move
+                                                ? "Move cancelled before planning"
+                                                : "Copy cancelled before planning")
+                                         : "View change cancelled before application";
                 p.change_error = true;
             } else if (cancelled && reply.change_outcome == FilesPaneChangeOutcome::Applied) {
                 p.error = "Change applied before cancellation completed";
                 p.change_error = true;
             }
-            if ((queued_view || queued_refresh) && reading_cursor && !cancelled) {
+            if ((queued_view || queued_refresh || queued_copy) && reading_cursor && !cancelled) {
                 if (const auto target = p.model.target()) {
                     if (begin_change(i, FilesPaneFocusRow{target->row}, true)) {
                         p.queued_view = std::move(queued_view);
                         p.queued_refresh = queued_refresh;
+                        p.queued_copy = queued_copy;
                     }
                 } else {
                     p.error = queued_refresh ? "Refresh not started; current row was not delivered"
+                            : queued_copy    ? "Operation not started; current row was not delivered"
                                              : "View not applied; current row was not delivered";
                     p.change_error = true;
                 }
@@ -3561,20 +3691,27 @@ struct FilesApp::State {
                        reply.change_outcome == FilesPaneChangeOutcome::Applied) {
                 start_refresh(i);
             } else if (queued_view && reply.kind == FilesPaneReplyKind::Focus && !cancelled &&
-                       reply.change_outcome == FilesPaneChangeOutcome::Applied)
+                       reply.change_outcome == FilesPaneChangeOutcome::Applied) {
                 begin_change(i, FilesPaneChangeView{std::move(*queued_view)}, true);
+            } else if (queued_copy && i == active && reply.kind == FilesPaneReplyKind::Focus && !cancelled &&
+                       reply.change_outcome == FilesPaneChangeOutcome::Applied) {
+                prepare_copy(*queued_copy);
+            }
             return;
         }
         p.error = reply.state == FilesPaneReplyState::Ready ? "Stale page rejected" : failure(reply);
         if (reply.change_outcome == FilesPaneChangeOutcome::Applied)
             p.error = (queued_refresh ? "Refresh not started; current row acknowledged; "
+                       : queued_copy  ? "Operation not started; current row acknowledged; "
                        : preparing_view ? "View not applied; current row acknowledged; " : "Change applied; ") + p.error;
         else if (reply.change_outcome == FilesPaneChangeOutcome::Unknown)
             p.error = "Change outcome unknown; reopen location before further actions. " + p.error;
         else if (reply.change_outcome == FilesPaneChangeOutcome::NotApplied)
             p.error = "Change not applied; " + p.error;
         else if (preparing_view)
-            p.error = (queued_refresh ? "Refresh not started; " : "View not applied; ") + p.error;
+            p.error = (queued_refresh ? "Refresh not started; "
+                       : queued_copy  ? "Operation not started; "
+                                      : "View not applied; ") + p.error;
         p.change_error = preparing_view || reply.change_outcome != FilesPaneChangeOutcome::NotRequested;
         if (refreshing) {
             p.refresh_failed = true;
@@ -3591,8 +3728,8 @@ struct FilesApp::State {
     void page(std::size_t i) {
         auto &p = panes[i];
         if (p.volume_view || volume_pending(i) || p.navigating || p.changing ||
-            p.queued_view || p.queued_refresh || p.inspection || !p.active || !surfaces[i]->visible() ||
-            !p.stamp.current() || !services[i]->running())
+            p.queued_view || p.queued_refresh || p.queued_copy.has_value() || p.inspection || !p.active ||
+            !surfaces[i]->visible() || !p.stamp.current() || !services[i]->running())
             return;
         auto range = p.model.viewport();
         if (covers(p, range) || (p.blocked && *p.blocked == range) || (p.reading && p.inflight == range))
@@ -3860,6 +3997,23 @@ struct FilesApp::State {
                 : " exceeds a planning limit");
             return;
         }
+        if (transfer && reply.state == FilesOperationPlanningReplyState::ReconciliationRequired) {
+            const auto &[source, planning] = *transfer;
+            const char *operation = planning.operation == ck::files::FileOperation::Move ? "Move" : "Copy";
+            if (reply.reconciliation && reply.reconciliation->has_retained_source_repeat())
+                panes[source].error = std::string(operation) +
+                    " blocked: previous move retained source; reconciliation required";
+            else if (reply.reconciliation && reply.reconciliation->has_untrusted_journal())
+                panes[source].error = std::string(operation) +
+                    " blocked: untrusted operation journal requires reconciliation";
+            else
+                panes[source].error = std::string(operation) +
+                    " blocked: overlapping operation requires reconciliation";
+            scan_operation_recovery();
+            if (reply.reconciliation)
+                show_reconciliation_overlap(planning.operation, *reply.reconciliation);
+            return;
+        }
         if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {
             if (transfer && reply.evidence && reply.plan->operation() == ck::files::FileOperation::Copy &&
                 reply.evidence->inventory->mount_policy() != ck::files::InventoryMountPolicy::DirectObjects &&
@@ -4022,6 +4176,8 @@ struct FilesApp::State {
                     detail += ": the new name conflicts with another transfer name";
                 else if (reply.error->error.operation == "files_execution.keep_both_name")
                     detail += ": the destination cannot use the new name";
+                else if (reply.error->error.operation == "files_execution.reconciliation_overlap")
+                    detail += ": an overlapping operation journal requires reconciliation";
                 else if (reply.error->error.domain == ck::files::ErrorDomain::Adapter &&
                          reply.error->error.code == static_cast<std::int64_t>(ck::files::AdapterError::PlanDecisionStale))
                     detail += ": source or destination changed since review. Review the operation again";
@@ -4033,6 +4189,8 @@ struct FilesApp::State {
             if (!operation_notice.empty())
                 detail += ". " + operation_notice;
             panes[source].error = std::move(detail);
+            if (reply.state == FilesOperationExecutionState::NeedsReconciliation && reply.reconciliation)
+                show_reconciliation_overlap(operation, *reply.reconciliation);
         }
         labels();
     }
@@ -4282,6 +4440,7 @@ struct FilesApp::State {
                     panes[i].changing.reset();
                     panes[i].queued_view.reset();
                     panes[i].queued_refresh = false;
+                    panes[i].queued_copy.reset();
                     panes[i].model.set_input_locked(false);
                     panes[i].error = changing ? "Worker stopped; change outcome unknown" : "Worker stopped";
                 }
@@ -4747,7 +4906,7 @@ FilesCommandAvailability FilesApp::availability(std::string_view command) const 
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
     if (state_->closing || state_->volume_pending(pane) || p.refresh_failed || p.navigating || p.changing ||
-        p.queued_view || p.queued_refresh || p.inspection || p.mutating ||
+        p.queued_view || p.queued_refresh || p.queued_copy.has_value() || p.inspection || p.mutating ||
         !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())

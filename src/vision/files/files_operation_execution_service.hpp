@@ -3,6 +3,7 @@
 #pragma once
 
 #include "files_operation_planning_service.hpp"
+#include "files_operation_recovery.hpp"
 #include "native_operation_copy_job.hpp"
 #include "native_operation_move_job.hpp"
 #include "reviewed_tree_plan.hpp"
@@ -76,6 +77,7 @@ struct FilesOperationExecutionReply final {
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
     std::vector<std::size_t> skipped_items;
     std::size_t retained_targets = 0;
+    std::optional<FilesOperationRecoveryOverlapReport> reconciliation;
 };
 
 // Includes display facts and opaque plan identity. The job, native roots and

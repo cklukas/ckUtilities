@@ -288,6 +288,42 @@ struct FilesOperationExecutionService::State final {
         return Result::unavailable(detail.state, detail.error);
     }
 
+    bool enforce_reconciliation_gate(FilesOperationExecutionReply &result,
+        const ck::files::NativeAbsolutePath &journal_root,
+        const ck::files::FrozenInventory &inventory,
+        std::optional<ck::files::ObjectIdentity> destination,
+        std::optional<ck::files::ObjectIdentity> source_parent) {
+        auto overlap = check_operation_recovery_overlap(
+            journal_root, inventory, std::move(destination), std::move(source_parent));
+        if (!overlap.value()) {
+            const auto detail = *overlap.unavailable_detail();
+            FilesOperationRecoveryOverlapReport report;
+            report.conflicts.push_back({
+                FilesOperationRecoveryOverlapKind::UntrustedJournal,
+                {},
+                std::nullopt,
+                std::nullopt,
+                std::nullopt,
+                "operation journal directory could not be scanned (" + detail.error.operation + ")",
+                std::nullopt,
+                std::nullopt,
+                std::nullopt});
+            result.state = FilesOperationExecutionState::NeedsReconciliation;
+            result.error = detail;
+            result.reconciliation = std::move(report);
+            return false;
+        }
+        if (overlap.value()->has_conflict()) {
+            result.state = FilesOperationExecutionState::NeedsReconciliation;
+            result.error = error(ck::files::AdapterError::ProviderReviewRequired,
+                                 "files_execution.reconciliation_overlap",
+                                 ck::files::ObservationState::Unknown);
+            result.reconciliation = std::move(overlap).take_value();
+            return false;
+        }
+        return true;
+    }
+
     void run_tree_copy(FilesOperationExecutionReply& result, const FilesOperationExecutionRequest& request,
         const FilesPaneOperationSources& sources, const FilesPaneOperationDestination& destination,
         std::stop_token stop_token) {
@@ -324,6 +360,9 @@ struct FilesOperationExecutionService::State final {
             stale();
             return;
         }
+        if (!enforce_reconciliation_gate(result, request.journal_root, *request.reviewed->inventory,
+                                         *parent.value(), request.reviewed->source_parent))
+            return;
         ReviewedTreePlanRequest tree;
         tree.source_root = sources.root_source;
         tree.destination_root = std::move(target).take_value();
@@ -445,6 +484,9 @@ struct FilesOperationExecutionService::State final {
                 stale();
                 return;
             }
+            if (!enforce_reconciliation_gate(result, request.journal_root, *request.reviewed->inventory,
+                                             *parent.value(), request.reviewed->source_parent))
+                return;
             const auto started = job->begin_execution(*receipt.value());
             if (const auto* failure = started.unavailable_detail()) {
                 fail(*failure);
@@ -598,6 +640,19 @@ struct FilesOperationExecutionService::State final {
                            "files_execution.delete_inventory_result"));
                 return;
             }
+            std::optional<ck::files::ObjectIdentity> delete_parent;
+            if (!(*completed.value())->sources().empty() && (*completed.value())->sources().front()) {
+                const auto &parent_id = (*completed.value())->sources().front()->parent_identity();
+                if (parent_id.value() &&
+                    ck::files::compare_identity(*parent_id.value(), *parent_id.value()) ==
+                        ck::files::IdentityComparison::Same)
+                    delete_parent = *parent_id.value();
+            }
+            if (!enforce_reconciliation_gate(result, value.journal_root, *(*completed.value())->inventory(),
+                                             std::nullopt, std::move(delete_parent))) {
+                emit(std::move(result));
+                return;
+            }
             ck::files::NativeOperationDeleteTreeRequest delete_request;
             delete_request.inventory = std::move(completed).take_value();
             delete_request.journal_root = std::move(value.journal_root);
@@ -673,6 +728,11 @@ struct FilesOperationExecutionService::State final {
         if (stop_token.stop_requested()) {
             fail(error(ck::files::AdapterError::InterruptedRead, "files_execution.cancelled",
                        ck::files::ObservationState::Unknown));
+            return;
+        }
+        if (!enforce_reconciliation_gate(result, value.journal_root, *fresh.inventory,
+                                         fresh.destination, fresh.source_parent)) {
+            emit(std::move(result));
             return;
         }
         value.policy.allow_unhandled_metadata_loss =

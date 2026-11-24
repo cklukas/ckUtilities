@@ -3961,3 +3961,330 @@ CK_TEST(files_app_operation_review_revalidates_accepted_decisions_before_deliver
     CK_CHECK(delivered_failure);
     CK_CHECK(!f.app->operation_review_pending());
 }
+
+CK_TEST(files_app_repeat_transfer_blocks_overlapping_unfinished_journal_and_allows_disjoint) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34});
+    f.loaded();
+
+    NativeFileSystem fs;
+    auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+    const auto left_dir = fs.open_native_directory(address(f.scratch.path() / "left"));
+    const auto right_dir = fs.open_native_directory(address(f.scratch.path() / "right"));
+    if (!left_dir.value() || !right_dir.value())
+        throw std::runtime_error("cannot open repeat-transfer fixture directories");
+    const auto source_file = (*left_dir.value())->open_child(leaf("left-item-0", u"left-item-0"), EntryAccess::MetadataOnly);
+    if (!source_file.value())
+        throw std::runtime_error("cannot open repeat-transfer fixture source file");
+    const auto id_left = *(*left_dir.value())->identity().value();
+    const auto id_right = *(*right_dir.value())->identity().value();
+    const auto id_source = *(*source_file.value())->inspect_basic().value()->identity.value();
+
+    const auto journal_root = address(f.scratch.path() / "operation-journals");
+    OperationJournalId id{};
+    id.bytes[0] = std::byte{0x71};
+    auto created = OperationJournal::create(FileOperation::Move, id, {4, 32, 4096});
+    if (!created.value())
+        throw std::runtime_error("cannot create overlapping fixture journal");
+    NativeOperationRecoveryEvidence ev{
+        leaf(".ck-staging-overlap", u".ck-staging-overlap"),
+        leaf("left-item-0", u"left-item-0"),
+        *NativeDurableIdentity::from_live(id_left),
+        *NativeDurableIdentity::from_live(id_source),
+        *NativeDurableIdentity::from_live(id_right),
+        std::nullopt,
+        address(f.scratch.path() / "right"),
+        std::nullopt,
+        std::nullopt,
+        StagingNamespace::Named,
+        leaf("left-item-0", u"left-item-0"),
+    };
+    const auto encoded = encode_native_operation_recovery_evidence(ev);
+    auto opened = open_native_operation_journal_file(
+        journal_root, leaf(".ck-move-journal-live-overlap", u".ck-move-journal-live-overlap"), true);
+    if (!encoded.value() || !opened.value())
+        throw std::runtime_error("cannot write overlapping fixture journal");
+    std::uint64_t seq = 1;
+    for (const auto state : {OperationJournalState::Planned, OperationJournalState::Prepared,
+                             OperationJournalState::Copied, OperationJournalState::Verified,
+                             OperationJournalState::CommitIntended, OperationJournalState::DestinationCommitted}) {
+        const auto payload = state == OperationJournalState::Planned ? std::vector<std::byte>{} : *encoded.value();
+        CK_CHECK(append_operation_journal_file(**opened.value(), **created.value(), {seq++, 0, state, payload}).value());
+    }
+    CK_CHECK((*opened.value())->finish_io().value());
+
+    // Exact repeat submission is blocked with Reconciliation required modal.
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.painted().find("Reconciliation required") != std::string::npos; });
+    const auto modal = f.painted();
+    CK_CHECK(modal.find("Original-job resume and linked retry") != std::string::npos);
+    CK_CHECK(modal.find(".ck-move-journal-live-overlap") != std::string::npos);
+    CK_CHECK(modal.find("destination committed") != std::string::npos);
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Reconciliation required") == std::string::npos; });
+
+    // Renaming the source file preserves its native identity; Move is still held.
+    std::filesystem::rename(f.scratch.path() / "left" / "left-item-0",
+                            f.scratch.path() / "left" / "left-item-0-renamed");
+    CK_CHECK(f.command("ck.files.refresh"));
+    f.loaded();
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "left")));
+    f.loaded();
+    auto cursor_name = [&] {
+        const auto *row = f.app->model(0).cursor_row();
+        return row ? row->display_name : std::string{};
+    };
+    for (std::size_t step = 0; step < f.app->model(0).row_count() &&
+         cursor_name() != "left-item-0-renamed"; ++step) {
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.application.step(f.clock.now_nanos());
+        f.loaded();
+    }
+    CK_CHECK(cursor_name() == "left-item-0-renamed");
+    CK_CHECK(f.command("ck.files.move"));
+    f.until([&] { return f.painted().find("Reconciliation required") != std::string::npos; });
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "left-item-0-renamed"));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Reconciliation required") == std::string::npos; });
+
+    // A disjoint file to a disjoint destination opens normal Copy review.
+    const auto other_dest = f.scratch.path() / "other-dest";
+    std::filesystem::create_directories(other_dest);
+    CK_CHECK(f.app->navigate(1, address(other_dest)));
+    f.loaded();
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "left")));
+    f.loaded();
+    for (std::size_t step = 0; step < f.app->model(0).row_count() &&
+         cursor_name() != "left-item-1"; ++step) {
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.application.step(f.clock.now_nanos());
+        f.loaded();
+    }
+    if (cursor_name() != "left-item-1")
+        throw std::runtime_error("unexpected cursor after reconciliation modal close: " + cursor_name());
+    CK_CHECK(cursor_name() == "left-item-1");
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->operation_review_pending(); });
+}
+
+CK_TEST(files_app_execution_blocks_conflicting_journal_appearing_during_review) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34});
+    f.loaded();
+
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+
+    // Inject an overlapping unfinished journal AFTER planning succeeded.
+    NativeFileSystem fs;
+    auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+    const auto left_dir = fs.open_native_directory(address(f.scratch.path() / "left"));
+    const auto right_dir = fs.open_native_directory(address(f.scratch.path() / "right"));
+    const auto source_file = (*left_dir.value())->open_child(leaf("left-item-0", u"left-item-0"), EntryAccess::MetadataOnly);
+    if (!left_dir.value() || !right_dir.value() || !source_file.value())
+        throw std::runtime_error("cannot open mid-review overlap fixture");
+    OperationJournalId id{};
+    id.bytes[0] = std::byte{0x72};
+    auto created = OperationJournal::create(FileOperation::Copy, id, {4, 32, 4096});
+    NativeOperationRecoveryEvidence ev{
+        leaf(".ck-staging-mid", u".ck-staging-mid"),
+        leaf("left-item-0", u"left-item-0"),
+        *NativeDurableIdentity::from_live(*(*left_dir.value())->identity().value()),
+        *NativeDurableIdentity::from_live(*(*source_file.value())->inspect_basic().value()->identity.value()),
+        *NativeDurableIdentity::from_live(*(*right_dir.value())->identity().value()),
+        std::nullopt,
+        address(f.scratch.path() / "right"),
+        std::nullopt,
+        std::nullopt,
+        StagingNamespace::Named,
+        leaf("left-item-0", u"left-item-0"),
+    };
+    const auto encoded = encode_native_operation_recovery_evidence(ev);
+    const auto journal_root = address(f.scratch.path() / "operation-journals");
+    auto opened = open_native_operation_journal_file(
+        journal_root, leaf(".ck-copy-journal-mid-review", u".ck-copy-journal-mid-review"), true);
+    if (!created.value() || !encoded.value() || !opened.value())
+        throw std::runtime_error("cannot write mid-review journal");
+    CK_CHECK(append_operation_journal_file(**opened.value(), **created.value(),
+                                           {1, 0, OperationJournalState::Planned, {}}).value());
+    CK_CHECK(append_operation_journal_file(**opened.value(), **created.value(),
+                                           {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
+    CK_CHECK((*opened.value())->finish_io().value());
+
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::CheckGroup *> checks;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), checks);
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    CK_CHECK(apply != nullptr && combos.size() == 1);
+    for (auto *check : checks)
+        check->set_checked(0, true);
+    combos.front()->set_selected_index(2);
+    CK_CHECK(apply->activate_mnemonic("a"));
+
+    f.until([&] { return f.painted().find("Reconciliation required") != std::string::npos; });
+    CK_CHECK(f.painted().find(".ck-copy-journal-mid-review") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("reconciliation") != std::string::npos);
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
+    std::size_t journal_count = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(f.scratch.path() / "operation-journals")) {
+        (void)entry;
+        ++journal_count;
+    }
+    CK_CHECK(journal_count == 1);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Reconciliation required") == std::string::npos; });
+}
+
+CK_TEST(files_app_foreign_partial_folder_merge_preserves_destination_only_and_source_entries) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34});
+    f.loaded();
+
+    NativeFileSystem fs;
+    auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+    const auto root = fs.open_native_directory(address(f.scratch.path()));
+    if (!root.value())
+        throw std::runtime_error("cannot open foreign-merge scratch root");
+    const auto src_parent = (*root.value())->create_child_directory(leaf("foreign-src", u"foreign-src"));
+    const auto dst_parent = (*root.value())->create_child_directory(leaf("foreign-dst", u"foreign-dst"));
+    if (!src_parent.value() || !dst_parent.value())
+        throw std::runtime_error("cannot create foreign-merge parent directories");
+    const auto photos_name = leaf("Photos", u"Photos");
+    const auto src_photos_dir = (*src_parent.value())->create_child_directory(photos_name);
+    const auto dst_photos_dir = (*dst_parent.value())->create_child_directory(photos_name);
+    if (!src_photos_dir.value() || !dst_photos_dir.value())
+        throw std::runtime_error("cannot create foreign-merge Photos directories");
+    const auto write_text = [](const DirectoryCursor &dir, const NativeName &name, std::string_view text) {
+        const auto file = dir.create_child_file(name);
+        if (!file.value())
+            throw std::runtime_error("cannot create foreign-merge fixture file");
+        const auto bytes = std::as_bytes(std::span(text.data(), text.size()));
+        const auto count = (*file.value())->write_content(0, bytes);
+        const auto finished = (*file.value())->finish_content_writes();
+        if (!count.value() || *count.value() != bytes.size() || !finished.value() || !*finished.value())
+            throw std::runtime_error("cannot write foreign-merge fixture file");
+    };
+    const auto read_text = [](const DirectoryCursor &dir, const NativeName &name) {
+        const auto file = dir.open_child(name, EntryAccess::ContentRead);
+        if (!file.value())
+            return std::string{};
+        const auto bytes = (*file.value())->read_content({64});
+        if (!bytes.value())
+            return std::string{};
+        return std::string(reinterpret_cast<const char *>(bytes.value()->bytes.data()),
+                           bytes.value()->bytes.size());
+    };
+    const auto name_a = leaf("A.txt", u"A.txt");
+    const auto name_b = leaf("B.txt", u"B.txt");
+    const auto name_c = leaf("C.txt", u"C.txt");
+    const auto name_d = leaf("D.txt", u"D.txt");
+    write_text(**src_photos_dir.value(), name_a, "source-A");
+    write_text(**src_photos_dir.value(), name_b, "source-B");
+    write_text(**src_photos_dir.value(), name_c, "source-C");
+    write_text(**dst_photos_dir.value(), name_a, "dest-A");
+    write_text(**dst_photos_dir.value(), name_d, "dest-only-D");
+
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "foreign-src")));
+    CK_CHECK(f.app->navigate(1, address(f.scratch.path() / "foreign-dst")));
+    f.loaded();
+    const auto *focused = f.app->model(0).cursor_row();
+    CK_CHECK(focused && focused->display_name == "Photos");
+
+    // No journal exists: conservative folder-merge review opens without inventing resume authority.
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] {
+        return f.app->operation_review_pending() || f.app->status(0).find("Copy failed") != std::string::npos;
+    });
+    CK_CHECK(f.app->operation_review_pending());
+    f.application.step(f.clock.now_nanos());
+    const auto review = f.painted();
+    CK_CHECK(review.find("Review folder copy") != std::string::npos);
+    CK_CHECK(review.find("Merge the two folders and keep files that exist only at the destination.") != std::string::npos);
+    CK_CHECK(review.find("A.txt") != std::string::npos);
+    CK_CHECK(review.find("B.txt") != std::string::npos);
+    CK_CHECK(review.find("C.txt") != std::string::npos);
+    // Conservative review never silently waives unverified preservation or invents journal authority.
+    CK_CHECK(review.find("Folder copy unavailable: the worker could not verify required preservation.") !=
+             std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.app->status(0).find("Copy cancelled") != std::string::npos; });
+    CK_CHECK(read_text(**src_photos_dir.value(), name_a) == "source-A");
+    CK_CHECK(read_text(**src_photos_dir.value(), name_b) == "source-B");
+    CK_CHECK(read_text(**src_photos_dir.value(), name_c) == "source-C");
+    CK_CHECK(read_text(**dst_photos_dir.value(), name_a) == "dest-A");
+    CK_CHECK(read_text(**dst_photos_dir.value(), name_d) == "dest-only-D");
+    CK_CHECK(!(*dst_photos_dir.value())->open_child(name_b, EntryAccess::MetadataOnly).value());
+    CK_CHECK(!(*dst_photos_dir.value())->open_child(name_c, EntryAccess::MetadataOnly).value());
+    std::size_t journal_count = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(f.scratch.path() / "operation-journals")) {
+        (void)entry;
+        ++journal_count;
+    }
+    CK_CHECK(journal_count == 0);
+
+    // When all incoming files already conflict and the user chooses Keep existing,
+    // applying the folder merge succeeds while preserving destination-only D.txt.
+    std::filesystem::remove(f.scratch.path() / "foreign-src" / "Photos" / "B.txt");
+    std::filesystem::remove(f.scratch.path() / "foreign-src" / "Photos" / "C.txt");
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] {
+        return f.app->operation_review_pending() || f.app->status(0).find("Copy failed") != std::string::npos;
+    });
+    CK_CHECK(f.app->operation_review_pending());
+    f.application.step(f.clock.now_nanos());
+    std::vector<ckv::widgets::ComboBox *> choices;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), choices);
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply folder copy")
+            apply = button;
+    CK_CHECK(apply != nullptr && choices.size() == 3);
+    if (apply && choices.size() == 3) {
+        for (auto *choice : choices)
+            choice->set_selected_index(1); // Keep existing on A.txt, destination-only D.txt, and folder default.
+        CK_CHECK(apply->activate_mnemonic("a"));
+        f.until([&] {
+            return !f.app->operation_review_pending() && !f.app->pending(0) && !f.app->pending(1) &&
+                   f.app->status(0).find("Copying") == std::string::npos;
+        });
+        CK_CHECK(read_text(**src_photos_dir.value(), name_a) == "source-A");
+        CK_CHECK(read_text(**dst_photos_dir.value(), name_a) == "dest-A");
+        CK_CHECK(read_text(**dst_photos_dir.value(), name_d) == "dest-only-D");
+    }
+}

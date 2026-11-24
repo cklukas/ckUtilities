@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "frozen_inventory.hpp"
 #include "operation_recovery.hpp"
 #include "operation_journal_file.hpp"
 
@@ -45,6 +46,52 @@ struct FilesOperationRecoveryScan final {
     std::vector<FilesOperationRecoveryItem> journals;
     bool requires_reconciliation = false;
 };
+
+enum class FilesOperationRecoveryOverlapKind {
+    UnfinishedTransfer,
+    UnfinishedDeletion,
+    RetainedSourceRepeat,
+    UntrustedJournal,
+    UnqualifiedJournal,
+};
+
+struct FilesOperationRecoveryOverlap final {
+    FilesOperationRecoveryOverlapKind kind = FilesOperationRecoveryOverlapKind::UntrustedJournal;
+    std::string journal_name;
+    std::optional<ck::files::OperationJournalId> journal_id;
+    std::optional<ck::files::OperationJournalState> state;
+    std::optional<ck::files::OperationRecoveryAction> action;
+    std::string reason;
+    std::optional<std::string> source_name;
+    std::optional<std::string> destination_name;
+    std::optional<std::string> destination_address;
+};
+
+struct FilesOperationRecoveryOverlapReport final {
+    std::vector<FilesOperationRecoveryOverlap> conflicts;
+    bool has_conflict() const noexcept { return !conflicts.empty(); }
+    bool has_untrusted_journal() const noexcept;
+    bool has_retained_source_repeat() const noexcept;
+};
+
+// Pure identity-based overlap analysis against a completed recovery scan.
+// Matches strictly through NativeDurableIdentity::matches_live, never display
+// paths. Unreadable, malformed, untrusted, or identity-less unfinished
+// journals fail closed so a new transfer cannot bypass unresolved old intent.
+FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
+    const FilesOperationRecoveryScan &scan,
+    const ck::files::FrozenInventory &inventory,
+    std::optional<ck::files::ObjectIdentity> destination = std::nullopt,
+    std::optional<ck::files::ObjectIdentity> source_parent = std::nullopt);
+
+// Worker-owned read-only composition: discovers journals below the private
+// journal root and assesses identity overlap for the proposed transfer.
+ck::files::Observation<FilesOperationRecoveryOverlapReport> check_operation_recovery_overlap(
+    const ck::files::NativeAbsolutePath &private_root,
+    const ck::files::FrozenInventory &inventory,
+    std::optional<ck::files::ObjectIdentity> destination = std::nullopt,
+    std::optional<ck::files::ObjectIdentity> source_parent = std::nullopt,
+    FilesOperationRecoveryLimits limits = {});
 
 enum class FilesOperationRecoverySubmission {
     Accepted,

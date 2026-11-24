@@ -74,7 +74,11 @@ bool limit_error(const ck::files::UnavailableObservation& detail) noexcept {
 
 bool FilesOperationReviewEvidence::same_namespace_and_sources(const FilesOperationReviewEvidence& fresh) const noexcept {
     using namespace ck::files;
-    if (!inventory || !fresh.inventory || compare_identity(destination, fresh.destination) != IdentityComparison::Same ||
+    const bool same_parent = source_parent && fresh.source_parent
+        ? compare_identity(*source_parent, *fresh.source_parent) == IdentityComparison::Same
+        : !source_parent && !fresh.source_parent;
+    if (!inventory || !fresh.inventory || !same_parent ||
+        compare_identity(destination, fresh.destination) != IdentityComparison::Same ||
         destination_address != fresh.destination_address ||
         destination_names != fresh.destination_names || inventory->mount_policy() != fresh.inventory->mount_policy() ||
         inventory->link_policy() != fresh.inventory->link_policy() ||
@@ -140,6 +144,14 @@ ck::files::Observation<FilesOperationReviewEvidence::Pointer> collect_files_oper
         return Observation<Result>::unavailable(destination.state(), destination.unavailable_detail()->error);
     if (compare_identity(*destination.value(), *destination.value()) != IdentityComparison::Same)
         return evidence_error<Result>(AdapterError::UnqualifiedIdentity, "files_planning.destination_identity", ObservationState::Unknown);
+    std::optional<ObjectIdentity> source_parent;
+    const auto &first_source = request.evidence.root_source ? request.evidence.root_source
+                                                            : request.evidence.direct_sources.front();
+    if (first_source) {
+        const auto &parent_id = first_source->parent_identity();
+        if (parent_id.value() && compare_identity(*parent_id.value(), *parent_id.value()) == IdentityComparison::Same)
+            source_parent = *parent_id.value();
+    }
     auto names = request.evidence.destination_names;
     const auto mount_policy = request.evidence.mount_policy;
     const auto link_policy = request.evidence.link_policy;
@@ -175,7 +187,7 @@ ck::files::Observation<FilesOperationReviewEvidence::Pointer> collect_files_oper
     auto result = std::make_shared<const FilesOperationReviewEvidence>(FilesOperationReviewEvidence{
         std::move(plan).take_value(), facts.inventory(), *destination.value(), std::move(names), std::move(times),
         mount_policy, link_policy, evidence_limits, request.projection_policy, request.limits,
-        std::move(request.destination_address)});
+        std::move(request.destination_address), std::move(source_parent)});
     if (sealed_sources)
         *sealed_sources = std::move(sources);
     return Observation<Result>::available(std::move(result));
@@ -280,6 +292,7 @@ struct FilesOperationPlanningService::State final {
                 result.plan.reset();
                 result.review.reset();
                 result.evidence.reset();
+                result.reconciliation.reset();
             }
             reply = std::move(result);
             needed = !std::exchange(signalled, true);
@@ -422,6 +435,8 @@ struct FilesOperationPlanningService::State final {
                         FilesOperationPlanningReply &result,
                         ck::files::Observation<ck::files::OperationPlan::Pointer> &plan) {
         try {
+            auto journal_root = std::move(native.journal_root);
+            const auto recovery_limits = native.recovery_limits;
             auto collected = collect_files_operation_evidence(std::move(native), stop);
             if (stop.stop_requested()) {
                 result.state = FilesOperationPlanningReplyState::Cancelled;
@@ -431,6 +446,64 @@ struct FilesOperationPlanningService::State final {
                                                      : FilesOperationPlanningReplyState::Failed;
             } else {
                 result.evidence = std::move(collected).take_value();
+                if (journal_root) {
+                    if (!journal_root->is_valid()) {
+                        FilesOperationRecoveryOverlapReport overlap;
+                        overlap.conflicts.push_back({
+                            FilesOperationRecoveryOverlapKind::UntrustedJournal,
+                            {},
+                            std::nullopt,
+                            std::nullopt,
+                            std::nullopt,
+                            "operation journal directory is invalid and cannot be scanned",
+                            std::nullopt,
+                            std::nullopt,
+                            std::nullopt});
+                        result.reconciliation = std::move(overlap);
+                        result.error = ck::files::UnavailableObservation{
+                            ck::files::ObservationState::Unknown,
+                            {ck::files::ErrorDomain::Adapter,
+                             static_cast<std::int64_t>(ck::files::AdapterError::ProviderReviewRequired),
+                             "files_planning.reconciliation_journal_root"}};
+                        result.state = FilesOperationPlanningReplyState::ReconciliationRequired;
+                        return;
+                    }
+                    auto overlap = check_operation_recovery_overlap(
+                        *journal_root, *result.evidence->inventory, result.evidence->destination,
+                        result.evidence->source_parent, recovery_limits);
+                    if (stop.stop_requested()) {
+                        result.state = FilesOperationPlanningReplyState::Cancelled;
+                        return;
+                    }
+                    if (!overlap.value()) {
+                        const auto detail = *overlap.unavailable_detail();
+                        FilesOperationRecoveryOverlapReport report;
+                        report.conflicts.push_back({
+                            FilesOperationRecoveryOverlapKind::UntrustedJournal,
+                            {},
+                            std::nullopt,
+                            std::nullopt,
+                            std::nullopt,
+                            "operation journal directory could not be scanned (" + detail.error.operation + ")",
+                            std::nullopt,
+                            std::nullopt,
+                            std::nullopt});
+                        result.reconciliation = std::move(report);
+                        result.error = detail;
+                        result.state = FilesOperationPlanningReplyState::ReconciliationRequired;
+                        return;
+                    }
+                    if (overlap.value()->has_conflict()) {
+                        result.reconciliation = std::move(overlap).take_value();
+                        result.error = ck::files::UnavailableObservation{
+                            ck::files::ObservationState::Unknown,
+                            {ck::files::ErrorDomain::Adapter,
+                             static_cast<std::int64_t>(ck::files::AdapterError::ProviderReviewRequired),
+                             "files_planning.reconciliation_overlap"}};
+                        result.state = FilesOperationPlanningReplyState::ReconciliationRequired;
+                        return;
+                    }
+                }
                 plan = ck::files::Observation<ck::files::OperationPlan::Pointer>::available(result.evidence->plan);
             }
         } catch (const std::invalid_argument &) {
@@ -520,6 +593,8 @@ struct FilesOperationPlanningService::State final {
                             native.projection_policy = pane_input->request.projection_policy;
                             native.limits = pane_input->request.limits;
                             native.destination_address = std::move(destination.address);
+                            native.journal_root = pane_input->request.journal_root;
+                            native.recovery_limits = pane_input->request.recovery_limits;
                             compose_native(std::move(native), stop.get_token(), result, plan);
                         }
                     }
@@ -530,7 +605,8 @@ struct FilesOperationPlanningService::State final {
                 }
                 if (result.state == FilesOperationPlanningReplyState::Cancelled ||
                     result.state == FilesOperationPlanningReplyState::Failed ||
-                    result.state == FilesOperationPlanningReplyState::LimitExceeded)
+                    result.state == FilesOperationPlanningReplyState::LimitExceeded ||
+                    result.state == FilesOperationPlanningReplyState::ReconciliationRequired)
                     ;
                 else if (!plan.value()) {
                     result.error = *plan.unavailable_detail();
@@ -600,6 +676,7 @@ bool FilesOperationPlanningService::cancel(const FilesOperationPlanningTicket& r
             state_->reply->plan.reset();
             state_->reply->review.reset();
             state_->reply->evidence.reset();
+            state_->reply->reconciliation.reset();
             state_->reply->error.reset();
             notify = !std::exchange(state_->signalled, true);
         }

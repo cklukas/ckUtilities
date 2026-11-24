@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "files_operation_recovery.hpp"
 #include "files_pane_service.hpp"
 #include "operation_evidence_job.hpp"
 #include "operation_planning_coordinator.hpp"
@@ -40,6 +41,8 @@ struct FilesOperationNativePlanningRequest final {
     ck::files::OperationPlanningCoordinatorLimits limits;
     ck::files::OperationReviewLimits review_limits;
     std::optional<ck::files::NativeAbsolutePath> destination_address;
+    std::optional<ck::files::NativeAbsolutePath> journal_root;
+    FilesOperationRecoveryLimits recovery_limits{};
 };
 
 // Composition-root request for the real pane operation path. The two pane
@@ -58,6 +61,8 @@ struct FilesOperationPanePlanningRequest final {
     ck::files::SourceCapabilityProjectionPolicy projection_policy;
     ck::files::OperationPlanningCoordinatorLimits limits;
     ck::files::OperationReviewLimits review_limits;
+    std::optional<ck::files::NativeAbsolutePath> journal_root;
+    FilesOperationRecoveryLimits recovery_limits{};
 };
 
 // Value evidence accompanies a native review. No cursor, probe or source
@@ -79,6 +84,7 @@ struct FilesOperationReviewEvidence final {
     ck::files::SourceCapabilityProjectionPolicy projection_policy;
     ck::files::OperationPlanningCoordinatorLimits limits;
     std::optional<ck::files::NativeAbsolutePath> destination_address;
+    std::optional<ck::files::ObjectIdentity> source_parent;
 
     bool same_namespace_and_sources(const FilesOperationReviewEvidence& fresh) const noexcept;
 };
@@ -92,7 +98,14 @@ ck::files::Observation<FilesOperationReviewEvidence::Pointer> collect_files_oper
     std::shared_ptr<const ck::files::CompletedRecursiveInventory>* sealed_sources = nullptr);
 
 enum class FilesOperationPlanningSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };
-enum class FilesOperationPlanningReplyState { Ready, Failed, Cancelled, LimitExceeded, WorkerFault };
+enum class FilesOperationPlanningReplyState {
+    Ready,
+    Failed,
+    Cancelled,
+    LimitExceeded,
+    ReconciliationRequired,
+    WorkerFault
+};
 
 struct FilesOperationPlanningTicket final {
     FilesOperationPlanningTicket() = default;
@@ -120,6 +133,7 @@ struct FilesOperationPlanningReply final {
     std::optional<ck::files::UnavailableObservation> error;
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
     FilesOperationReviewEvidence::Pointer evidence;
+    std::optional<FilesOperationRecoveryOverlapReport> reconciliation;
 };
 
 // One serialized, value-only planning worker. The request owns every copied
