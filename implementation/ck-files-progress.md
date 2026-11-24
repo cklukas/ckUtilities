@@ -1,5 +1,58 @@
 # Files implementation evidence
 
+## 2026-11-24 — Reconciliation-aware repeat planning and Windows ConPTY runtime qualification
+
+Frontend `ddeddd4` adds identity-based operation-recovery overlap checks in
+both planning (`FilesOperationPlanningService`) and pre-execution
+(`FilesOperationExecutionService`). Repeat submissions that match an
+unfinished journal or a `RetainedSource` move by `NativeDurableIdentity`
+(including renamed sources) or encounter an unreadable, malformed, or
+unqualified journal root fail closed with a modal `Reconciliation required`
+dialog that distinguishes original-job resume / linked retry from a new
+transfer and links directly to operation recovery inspection. Disjoint
+transfers remain unblocked. It also fixes unmarked single-row Copy/Move to
+synchronize pane focus with the worker before planning (`queued_copy`), and
+qualifies conservative foreign partial-folder merge without a journal
+(refusing unverified preservation, preserving destination-only files under
+explicit `Keep existing`).
+
+Frontend `9451a29` and `142cd1c` restore Windows MSVC compatibility with
+pinned ckVision 2.1.0 (`3d018210`) by including `<windows.h>` in
+`native_host.hpp`, renaming the `small` local colliding with `rpcndr.h` in
+`files_app_tests.cpp`, routing `host_diagnostics.hpp` and
+`windows_tools_contract.cpp` through the repository's
+`ck::files::windows_extended_path`, and adding a real Windows ConPTY WP-02
+runtime test (`windows_files_conpty_wp02_selection_settings_and_volumes`).
+
+On the Windows workstation (`V:` Dev Drive, observed ReFS provider) against a
+matching local MSVC-built ckVision 2.1.0 SDK (`cvision.lib` SHA-256
+`9bf76e69...`) and pinned `ck-core-fs-lib` `d51e5a0`, `142cd1c` passed
+`verify_ckvision_package`, all 4 focused WP-03 tests, all 8 Windows Vision
+Files/keymap/shell CTests, and `ck_windows_tools_contract` (all 10 suite
+tools in real ConPTY, launcher round trip, selection continuity across
+external insertion and `Ctrl+R` refresh, persisted `CKFILES_SETTINGS 1` /
+`BOOKMARK 0 W` reopening across clean exit and restart, and pane-local
+Windows volumes view with volume Copy gated and destination unchanged).
+
+On POSIX, `142cd1c` passed 115/115 macOS ARM64 Release entries and 61/61
+Linux ARM64 affected Release entries, plus both independent ckVision SDK
+consumers. All four matching sanitizer cohorts (Linux Clang 19 ASan/UBSan
+and GCC 14 ThreadSanitizer, macOS AppleClang ASan/UBSan and Homebrew LLVM
+ThreadSanitizer) passed on `9451a29` (identical POSIX application code to
+`142cd1c`). APFS publication (B-01), Windows desktop-window inspection, and
+backend-qualified original-job resume / linked-retry execution (B-03) remain
+explicitly open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release (`142cd1c`, 115/115) | `35b0c182ffd1332210d911ea5d8e428c8ffdc68261119f1645046c3cb437b790` |
+| Linux ARM64 Release (`142cd1c`, 61/61) | `74de0702f0a1e925505e3b03350ec90e19fbe9698e0929fbae85300b8558171e` |
+| Windows x64 Release + ConPTY (`142cd1c`, 9/9) | `4cd7ea901aa9c8ae4668355251fe9b1d2fb152dc5612a6cbec69838d334ea72d` |
+| Linux ARM64 ASan/UBSan (`9451a29`) | `7b012d1a4cf2ec58ac0666135f4d112e2f387c8916248461a411384b4d51ef0a` |
+| Linux ARM64 ThreadSanitizer (`9451a29`) | `20ff4c339a0715411bea00962107154a14cc41e75a64550aed89010c074bab15` |
+| macOS ARM64 ASan/UBSan (`9451a29`) | `1c7d48b2c1d7642698aeb555ea229da7347642fbe8a219ac1a5f4d5ae7c8067e` |
+| macOS ARM64 ThreadSanitizer (`9451a29`) | `88e1cf1e004f5d7d3a45b5033d99a651369c619660e00f3d6da0cc0423cd407f` |
+
 ## 2026-11-24 — Archive metadata read failures block creation
 
 Frontend `4f51c32` marks failed metadata observations as hard archive

@@ -467,7 +467,10 @@ authority and does not close the application or release requirements below.
   its mark. See the [current refresh qualification](ck-files-progress.md#2026-11-24--refresh-recovery-and-bookmark-persistence).
   The hosted Windows NTFS backend passed the native indexed mark-binding
   test, all 88 backend tests, and five installed SDK consumer tests.
-  Windows runtime and desktop-window acceptance stay open.
+  Frontend `142cd1c` on Windows x64 (`V:` Dev Drive, ReFS) passed all 8
+  Windows Vision Files/keymap/shell CTests plus `ck_windows_tools_contract`
+  in real ConPTY, verifying mark continuity across external insertion and
+  `Ctrl+R` refresh. Windows desktop-window inspection stays open.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no
@@ -503,7 +506,10 @@ authority and does not close the application or release requirements below.
   close and relaunch in xterm. See the
   [current settings qualification](ck-files-progress.md#2026-11-24--refresh-recovery-and-bookmark-persistence).
   Current-source macOS and Linux ASan and UBSan and Linux ThreadSanitizer
-  passed with matching SDKs. Windows runtime remains open.
+  passed with matching SDKs. Frontend `142cd1c` on Windows x64 (`V:` Dev
+  Drive) passed all 8 Windows Vision CTests (including settings allocation
+  bounds) and real ConPTY bookmark persistence across clean exit and
+  restart; Windows desktop-window inspection remains open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
   The current Linux Release build passed xterm volume navigation and
@@ -558,6 +564,10 @@ authority and does not close the application or release requirements below.
   The [metadata failure checkpoint](ck-files-progress.md#2026-11-24--archive-metadata-read-failures-block-creation)
   verifies that failed xattr enumeration and value reads block archive approval
   across Release, ASan/UBSan, and ThreadSanitizer with matching ckVision 2.1 SDKs.
+  The [reconciliation and Windows ConPTY checkpoint](ck-files-progress.md#2026-11-24--reconciliation-aware-repeat-planning-and-windows-conpty-runtime-qualification)
+  qualifies Windows x64 (`V:`) Vision archive/application suites and real
+  ConPTY volume-view / gated volume-Copy behavior on `142cd1c`. APFS
+  publication (B-01) and Windows desktop-window inspection remain open.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
@@ -576,10 +586,19 @@ flows; their cross-platform release qualification remains in WP-07/WP-08.
 - [x] Implement review dialogs for preservation loss, uncertainty, collisions,
   destination replacement and explicit directory merges.
 - [x] Bind user decisions to plan identity and invalidate them on relevant change.
-- [ ] Add reconciliation-aware repeat planning: distinguish original-job resume,
+- [~] Add reconciliation-aware repeat planning: distinguish original-job resume,
   linked retry and a new transfer; protect previously committed and
   destination-only entries. Changed/new source children require explicit scope
   review. Qualify foreign partial-folder merge with no trustworthy journal.
+  Frontend `ddeddd4` / `142cd1c` implements identity-based worker overlap checks
+  during both planning and pre-execution (failing closed on unfinished,
+  `RetainedSource`, or untrusted journals with a modal `Reconciliation required`
+  review and recovery-inspector handoff while allowing disjoint transfers),
+  syncs unmarked single-row focus before planning, and qualifies conservative
+  foreign partial-folder merge across macOS, Linux, and Windows Release plus
+  macOS and Linux ASan/UBSan and ThreadSanitizer. Backend-qualified original-job
+  resume and linked-retry execution remain open under B-03. See the
+  [reconciliation qualification record](ck-files-progress.md#2026-11-24--reconciliation-aware-repeat-planning-and-windows-conpty-runtime-qualification).
 
 Acceptance: tests demonstrate separate consent for missing ADS/resource forks,
 ACL/security changes, sparse expansion, timestamp precision, hard-link loss,
