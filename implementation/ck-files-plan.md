@@ -549,6 +549,9 @@ authority and does not close the application or release requirements below.
   The [native process restart checkpoint](ck-files-progress.md#2026-11-24--volume-archive-process-restart-and-inspection)
   covers four process crash boundaries on ext4, XFS, and Btrfs,
   bounded long native journal paths, and the real xterm recovery dialog.
+  The [archive history checkpoint](ck-files-progress.md#2026-11-24--complete-archive-recovery-history)
+  shows all journals returned by the worker and exposes the recorded
+  destination, including when many older records precede a blocking journal.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates

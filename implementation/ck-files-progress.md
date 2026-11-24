@@ -1,5 +1,40 @@
 # Files implementation evidence
 
+## 2026-11-24 — Complete archive recovery history
+
+Frontend `6a370d8` replaces the first-64-journal report with a list backed by
+the immutable worker scan. It puts records requiring reconciliation and
+journal errors first. Every returned entry can open a separate read-only
+detail view with its recorded state and action. Exact recorded destination
+paths are escaped for display without resolving them. The list formats only
+visible rows and keeps the same selection when details close.
+
+The headless regression admitted 70 native journal records and opened both
+the interrupted entry and the final entry. The long-path regression also
+checked the rendered spelling of exact POSIX bytes and Windows drive and
+UNC UTF-16 paths. The final Release build passed all 115 macOS and 59 affected
+Linux entries, plus both independent ckVision SDK consumers.
+
+In a real Linux ARM64 xterm, the live archive process was interrupted just
+after publication. Files restarted with its real journal and 69 older
+cancelled fixture journals in the same profile. The active warning blocked
+volume Copy. The interrupted journal appeared first and showed its
+ambiguity and recorded destination. Keyboard navigation reached the last
+entry and opened its cancelled record. All 70 journal identities and
+digests, the source data, and the published archive survived unchanged.
+
+The focused history regression and all four macOS ARM64 application shards
+passed with ASan/UBSan against the matching instrumented ckVision 2.1 SDK.
+The independent SDK consumer also passed. The Files guide passed a strict
+ckdocs render.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release | `3431cdd639a88ef34063146fca6d857d6819466ae4580b908eff0aa65c0e50be` |
+| Linux ARM64 affected Release suite | `c9f98b8fea1f47228fcd924748e0f38aad360fb4148fe4841674fbc4097655b6` |
+| macOS ARM64 ASan/UBSan application | `df893b40c185c0193a5b0fe524e42e2f6082f5166244f9fb27e4fbfc8a8d1e36` |
+| Linux ARM64 xterm restart receipt | `08a8a00e4d13136da08cbb057f4d6ec0f12b4ac531fb00cdee6b684c3909a9ae` |
+
 ## 2026-11-24 — Volume archive process restart and inspection
 
 Frontend `6987954` starts a reviewed archive with a native source and
