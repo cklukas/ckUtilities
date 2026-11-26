@@ -458,6 +458,9 @@ struct FilesOperationPlanningService::State final {
                             "operation journal directory is invalid and cannot be scanned",
                             std::nullopt,
                             std::nullopt,
+                            std::nullopt,
+                            std::nullopt,
+                            std::nullopt,
                             std::nullopt});
                         result.reconciliation = std::move(overlap);
                         result.error = ck::files::UnavailableObservation{
@@ -485,6 +488,9 @@ struct FilesOperationPlanningService::State final {
                             std::nullopt,
                             std::nullopt,
                             "operation journal directory could not be scanned (" + detail.error.operation + ")",
+                            std::nullopt,
+                            std::nullopt,
+                            std::nullopt,
                             std::nullopt,
                             std::nullopt,
                             std::nullopt});

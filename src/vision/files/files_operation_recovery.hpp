@@ -5,10 +5,12 @@
 #include "frozen_inventory.hpp"
 #include "operation_recovery.hpp"
 #include "operation_journal_file.hpp"
+#include "transfer_reconciliation.hpp"
 
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -40,11 +42,13 @@ struct FilesOperationRecoveryItem final {
     std::optional<FilesOperationRecoveryReport> report;
     std::optional<ck::files::UnavailableObservation> error;
     FilesOperationJournalKind kind = FilesOperationJournalKind::Transfer;
+    std::optional<ck::files::TransferJournalInspection> reconciliation;
 };
 
 struct FilesOperationRecoveryScan final {
     std::vector<FilesOperationRecoveryItem> journals;
     bool requires_reconciliation = false;
+    std::optional<ck::files::TransferJournalCatalog> reconciliation_catalog;
 };
 
 enum class FilesOperationRecoveryOverlapKind {
@@ -65,6 +69,9 @@ struct FilesOperationRecoveryOverlap final {
     std::optional<std::string> source_name;
     std::optional<std::string> destination_name;
     std::optional<std::string> destination_address;
+    std::optional<ck::files::TransferRequestDisposition> disposition;
+    std::optional<ck::files::TransferRowReview> row_review;
+    std::optional<ck::files::TransferLineageStatus> lineage;
 };
 
 struct FilesOperationRecoveryOverlapReport final {
@@ -83,6 +90,13 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
     const ck::files::FrozenInventory &inventory,
     std::optional<ck::files::ObjectIdentity> destination = std::nullopt,
     std::optional<ck::files::ObjectIdentity> source_parent = std::nullopt);
+
+// Delegates to ck-core-fs-lib's transfer reconciliation classifier
+// (ResumeRecorded / RetryUnresolved / SubmitAgain) against a completed scan.
+ck::files::Observation<ck::files::TransferRequestReview> review_operation_transfer_request(
+    const FilesOperationRecoveryScan &scan,
+    const ck::files::TransferRequestReviewInput &input,
+    std::stop_token stop = {});
 
 // Worker-owned read-only composition: discovers journals below the private
 // journal root and assesses identity overlap for the proposed transfer.

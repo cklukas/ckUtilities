@@ -29,6 +29,7 @@
 #include "operation_journal_file.hpp"
 #include "scratch_directory.hpp"
 #include "simulated_filesystem.hpp"
+#include "sync_session.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
@@ -545,6 +546,18 @@ OperationJournalId crash_journal_id(std::uint8_t tag) {
 
 int run_crash_child(std::string_view mode, const std::filesystem::path &root_dir) {
     try {
+        if (mode == "sync_session_lock") {
+            const auto coord_addr = host_address(root_dir / "coord");
+            const auto left_addr = host_address(root_dir / "left");
+            const auto right_addr = host_address(root_dir / "right");
+            auto backend = take_obs(open_native_sync_session_backend(coord_addr, left_addr, right_addr),
+                                    "child.sync_session_lock");
+            std::fputs("READY\n", stdout);
+            std::fflush(stdout);
+            std::this_thread::sleep_for(std::chrono::seconds(15));
+            (void)backend->finish_io();
+            return 99;
+        }
         const auto src_a = root_dir / "src-a";
         const auto dst_a = root_dir / "dst-a";
         const auto journals = root_dir / "journals";
@@ -697,7 +710,8 @@ struct ScopedWinEnvVar {
     ScopedWinEnvVar &operator=(const ScopedWinEnvVar &) = delete;
 };
 
-bool spawn_and_crash_child(std::string_view mode, const std::filesystem::path &root_dir) {
+bool spawn_and_crash_child(std::string_view mode, const std::filesystem::path &root_dir,
+                           const std::function<void()> &on_ready = {}) {
     const std::wstring exe_raw = current_executable_wide();
     const auto exe_ext = windows_extended_path(exe_raw);
     if (!exe_ext)
@@ -759,6 +773,8 @@ bool spawn_and_crash_child(std::string_view mode, const std::filesystem::path &r
     CloseHandle(read_pipe);
 
     const bool ready_seen = has_ready_line();
+    if (ready_seen && on_ready)
+        on_ready();
     constexpr UINT kKillCode = 137U;
     const bool terminated = ready_seen && TerminateProcess(pi.hProcess, kKillCode) != 0;
     const DWORD wait_rc = WaitForSingleObject(pi.hProcess, 10000U);
@@ -811,7 +827,8 @@ struct ScopedPosixEnvVar {
     ScopedPosixEnvVar &operator=(const ScopedPosixEnvVar &) = delete;
 };
 
-bool spawn_and_crash_child(std::string_view mode, const std::filesystem::path &root_dir) {
+bool spawn_and_crash_child(std::string_view mode, const std::filesystem::path &root_dir,
+                           const std::function<void()> &on_ready = {}) {
     const std::string exe = current_executable_posix();
     if (exe.empty())
         return false;
@@ -876,6 +893,8 @@ bool spawn_and_crash_child(std::string_view mode, const std::filesystem::path &r
     ::close(pipefd[0]);
 
     const bool ready_seen = ready_buf.find("READY\n") != std::string::npos;
+    if (ready_seen && on_ready)
+        on_ready();
     const bool killed = (::kill(pid, SIGKILL) == 0);
     int status = 0;
     pid_t waited = -1;
@@ -1621,6 +1640,43 @@ CK_TEST(wp07_recovery_and_settings_oversized_and_bounded_input_resilience) {
     const auto reloaded = valid_store.load();
     CK_CHECK(reloaded.diagnostic.empty());
     CK_CHECK(reloaded.value.views[0].sort == PaneSortKey::Size && reloaded.value.views[0].descending);
+}
+
+CK_TEST(wp07_cross_process_sync_session_coordination_blocks_overlapping_consumer) {
+    const ck::testing::ScratchDirectory scratch("wp07-b05-sync-coord", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto coord = scratch.path() / "coord";
+    const auto left = scratch.path() / "left";
+    const auto right = scratch.path() / "right";
+    CK_CHECK(create_private_dir(coord));
+    CK_CHECK(create_private_dir(left));
+    CK_CHECK(create_private_dir(right));
+
+    const auto coord_addr = host_address(coord);
+    const auto left_addr = host_address(left);
+    const auto right_addr = host_address(right);
+    CK_CHECK(prepare_native_operation_journal_root(coord_addr).value());
+
+    bool saw_same_contention = false;
+    bool saw_reversed_contention = false;
+    CK_CHECK(spawn_and_crash_child("sync_session_lock", scratch.path(), [&] {
+        // While the child process holds OS-level root locks, overlapping consumer
+        // acquisition (same order or reversed roots) must fail closed with Changed.
+        const auto same = open_native_sync_session_backend(coord_addr, left_addr, right_addr);
+        saw_same_contention = (!same.value() && same.state() == ObservationState::Changed);
+        const auto reversed = open_native_sync_session_backend(coord_addr, right_addr, left_addr);
+        saw_reversed_contention = (!reversed.value() && reversed.state() == ObservationState::Changed);
+    }));
+    CK_CHECK(saw_same_contention);
+    CK_CHECK(saw_reversed_contention);
+
+    // After the child is abruptly terminated (SIGKILL / TerminateProcess), the OS
+    // releases its crash-abandoned locks and the next consumer acquires cleanly.
+    auto recovered = open_native_sync_session_backend(coord_addr, left_addr, right_addr);
+    CK_CHECK(recovered.value() != nullptr);
+    if (recovered.value()) {
+        const auto finished = (*recovered.value())->finish_io();
+        CK_CHECK(finished.value() && *finished.value());
+    }
 }
 
 int main(int argc, char **argv) {

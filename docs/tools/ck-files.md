@@ -186,7 +186,9 @@ clipboard.
   overlaps an unfinished, retained-source, or untrusted operation journal by
   native source or destination identity—even after a rename—planning and
   execution hold the transfer and open **Reconciliation required** instead of
-  bypassing the unresolved record. Ordinary-copy journals
+  bypassing the unresolved record, displaying the backend's reconciliation
+  disposition, per-item review classification, and retry-lineage status.
+  Ordinary-copy journals
   also retain the independently verified whole-file SHA-256 receipt at the
   Copied and Verified boundaries; it is used for future reconciliation only,
   never as pathname-based authority. A worker-only read-only verifier can

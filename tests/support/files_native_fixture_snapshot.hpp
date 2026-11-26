@@ -1,7 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#if defined(__APPLE__)
+#if !defined(_WIN32)
 #include "operation_journal_file.hpp"
 #include <filesystem>
 #include <fstream>
@@ -33,10 +33,17 @@ inline FilesFixtureTree observe_files_fixture_tree(const std::filesystem::path& 
             bytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
             if (input.bad()) throw std::runtime_error("cannot complete controlled file fixture read");
         }
+#if defined(__APPLE__)
+        const auto mtime = native.st_mtimespec;
+        const auto ctime = native.st_ctimespec;
+#else
+        const auto mtime = native.st_mtim;
+        const auto ctime = native.st_ctim;
+#endif
         result.emplace(path == root ? "." : path.lexically_relative(root).generic_string(), FilesFixtureEntry{
             static_cast<std::uint64_t>(native.st_dev), static_cast<std::uint64_t>(native.st_ino),
-            static_cast<std::uint32_t>(native.st_mode), native.st_mtimespec.tv_sec, native.st_ctimespec.tv_sec,
-            native.st_mtimespec.tv_nsec, native.st_ctimespec.tv_nsec, std::move(bytes)});
+            static_cast<std::uint32_t>(native.st_mode), static_cast<std::int64_t>(mtime.tv_sec),
+            static_cast<std::int64_t>(ctime.tv_sec), mtime.tv_nsec, ctime.tv_nsec, std::move(bytes)});
     };
     observe(root);
     for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) observe(entry.path());

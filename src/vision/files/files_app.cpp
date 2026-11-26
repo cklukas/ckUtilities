@@ -1739,6 +1739,51 @@ struct FilesApp::State {
     bool reconciliation_overlap_open() const {
         return reconciliation_overlap_window && !reconciliation_overlap_lifetime.expired();
     }
+    static const char *transfer_disposition_label(ck::files::TransferRequestDisposition disposition) noexcept {
+        using D = ck::files::TransferRequestDisposition;
+        switch (disposition) {
+        case D::ReviewRecordedAttempt: return "review recorded attempt";
+        case D::ReviewNewLinkedAttempt: return "review new linked attempt";
+        case D::ReviewBlockedRetry: return "blocked retry";
+        case D::ReviewOverlappingAttempts: return "overlapping transfer attempts";
+        case D::ReviewUnknownScope: return "unknown transfer scope";
+        case D::PreserveDestinationOnly: return "preserve destination-only entry";
+        case D::ReviewObservedComparison: return "review observed comparison";
+        }
+        return "unknown transfer scope";
+    }
+    static const char *transfer_row_review_label(ck::files::TransferRowReview review) noexcept {
+        using R = ck::files::TransferRowReview;
+        switch (review) {
+        case R::RevalidateOriginalScope: return "revalidate original scope";
+        case R::PreserveUnpublishedStaging: return "preserve unpublished staging";
+        case R::ReviewVerifiedStaging: return "review verified staging";
+        case R::InspectAmbiguousPublication: return "inspect ambiguous publication";
+        case R::VerifyAndProtectCommittedDestination: return "verify and protect committed destination";
+        case R::InspectAmbiguousSourceRetirement: return "inspect ambiguous source retirement";
+        case R::RequireEvidenceReview: return "require evidence review";
+        }
+        return "require evidence review";
+    }
+    static const char *transfer_lineage_label(ck::files::TransferLineageStatus lineage) noexcept {
+        using L = ck::files::TransferLineageStatus;
+        switch (lineage) {
+        case L::Unrecorded: return "unrecorded";
+        case L::ParentAndScopeMatched: return "parent and scope matched";
+        case L::Malformed: return "malformed retry provenance";
+        case L::UnsupportedVersion: return "unsupported retry version";
+        case L::DuplicateJournalId: return "duplicate journal identifier";
+        case L::ParentMissing: return "parent journal missing";
+        case L::Cycle: return "retry lineage cycle";
+        case L::ParentBytesUnverified: return "parent journal bytes unverified";
+        case L::ParentItemMissing: return "parent item missing";
+        case L::ParentItemIneligible: return "parent item ineligible";
+        case L::ScopeUnverified: return "scope unverified";
+        case L::ScopeMismatch: return "scope mismatch";
+        case L::InvalidAncestor: return "invalid ancestor";
+        }
+        return "unrecorded";
+    }
     void show_reconciliation_overlap(ck::files::FileOperation operation,
                                      const FilesOperationRecoveryOverlapReport &report) {
         if (modal_pending() || !report.has_conflict())
@@ -1780,6 +1825,12 @@ struct FilesApp::State {
             if (conflict.state || conflict.action)
                 detail << '\n';
             detail << "Reason: " << conflict.reason << '\n';
+            if (conflict.disposition)
+                detail << "Disposition: " << transfer_disposition_label(*conflict.disposition) << '\n';
+            if (conflict.row_review)
+                detail << "Review: " << transfer_row_review_label(*conflict.row_review) << '\n';
+            if (conflict.lineage && *conflict.lineage != ck::files::TransferLineageStatus::Unrecorded)
+                detail << "Lineage: " << transfer_lineage_label(*conflict.lineage) << '\n';
             if (conflict.source_name)
                 detail << "Source: " << *conflict.source_name << '\n';
             if (conflict.destination_name)
@@ -1920,6 +1971,14 @@ struct FilesApp::State {
                     const auto &recovery = inspection.report.items[row];
                     summary << "State: " << archive_recovery_state(recovery.state)
                             << "; action: " << archive_recovery_action(recovery.action) << '\n';
+                    if (item.reconciliation) {
+                        for (const auto &rec_row : item.reconciliation->items) {
+                            if (rec_row.item == recovery.item) {
+                                summary << "Review: " << transfer_row_review_label(rec_row.review) << '\n';
+                                break;
+                            }
+                        }
+                    }
                     while (artifact != inspection.artifacts.end() && artifact->item < recovery.item)
                         ++artifact;
                     if (artifact != inspection.artifacts.end() && artifact->item == recovery.item && artifact->evidence) {
@@ -4168,8 +4227,12 @@ struct FilesApp::State {
                 detail = label + " failed";
             if (reply.error) {
                 if (reply.error->state == ck::files::ObservationState::Unsupported &&
-                    reply.error->error.operation == "create_staging_file.fd_publication_unqualified")
+                    (reply.error->error.operation == "create_staging_file.fd_publication_unqualified" ||
+                     reply.error->error.operation == "preflight.fd_publication_unqualified"))
                     detail += ": verified file publication is unavailable on this platform";
+                else if (reply.error->state == ck::files::ObservationState::Unsupported &&
+                         reply.error->error.operation == "preflight.source_exclusion_unqualified")
+                    detail += ": verified source retirement is unavailable on this platform";
                 else if (reply.error->error.operation == "files_execution.keep_both_occupied")
                     detail += ": the new name already exists. Review the operation again";
                 else if (reply.error->error.operation == "files_execution.keep_both_duplicate")

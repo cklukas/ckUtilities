@@ -661,87 +661,31 @@ struct Fixture {
 };
 #if defined(__APPLE__)
 void expect_mac_copy_publication_refusal(Fixture& fixture, const ck::testing::FilesFixtureTree& source_before,
-                                         const ck::testing::FilesFixtureTree& target_before, bool marked_batch = false) {
+                                         const ck::testing::FilesFixtureTree& target_before, bool /*marked_batch*/ = false) {
     fixture.until([&] {
         return !fixture.app->operation_review_pending() && !fixture.app->pending(0) && !fixture.app->pending(1) &&
-               fixture.app->status(0).find("Copy needs reconciliation") != std::string::npos;
+               fixture.app->status(0).find("Copy failed") != std::string::npos;
     });
     fixture.execution_service->request_stop();
-    fixture.execution_service->join(); // Drain native writers/journals before independent inspection.
+    fixture.execution_service->join(); // Drain worker before independent inspection.
     CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
     CK_CHECK(fixture.app->status(0).find("verified file publication is unavailable on this platform") != std::string::npos);
     CK_CHECK(fixture.app->status(0).find("create_staging_file.fd_publication_unqualified") == std::string::npos);
+    CK_CHECK(fixture.app->status(0).find("preflight.fd_publication_unqualified") == std::string::npos);
     CK_CHECK(fixture.app->status(0).find("Copy completed") == std::string::npos);
-    auto target_after = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right");
     unsigned journals = 0;
-    unsigned retained_directories = 0;
-    unsigned total_prepared = 0;
-    for (const auto& entry : std::filesystem::directory_iterator(fixture.scratch.path() / "operation-journals")) {
-        const auto filename = entry.path().filename().native();
-        if (!filename.starts_with(".ck-copy-journal-") && !filename.starts_with(".ck-tree-journal-")) continue;
-        ++journals;
-        const auto journal = ck::testing::read_files_fixture_journal(entry.path());
-        CK_CHECK(!journal->records().empty());
-        const bool tree_journal = filename.starts_with(".ck-tree-journal-");
-        std::vector<OperationJournalState> states;
-        for (const auto& record : journal->records()) {
-            states.push_back(record.state);
-            if (record.state == OperationJournalState::Prepared) {
-                ++total_prepared;
-                if (tree_journal) {
-                    const auto decoded = decode_native_operation_recovery_evidence(record.evidence);
-                    CK_CHECK(decoded.value() && decoded.value()->staging_identity);
-                    if (!decoded.value() || !decoded.value()->staging_identity)
-                        throw std::runtime_error("missing retained tree staging identity");
-                    const auto& receipt = *decoded.value();
-                    CK_CHECK(receipt.staging_name.posix_bytes() && receipt.destination_name.posix_bytes());
-                    const auto staging = *receipt.staging_name.posix_bytes();
-                    CK_CHECK(staging.starts_with(".ck-tree-staging-"));
-                    CK_CHECK(!std::filesystem::exists(fixture.scratch.path() / "right" / *receipt.destination_name.posix_bytes()));
-                    NativeFileSystem native;
-                    auto parent = native.open_directory(fixture.scratch.path() / "right");
-                    if (!parent.value()) throw std::runtime_error("cannot inspect retained tree parent");
-                    auto held = (*parent.value())->open_child(receipt.staging_name, EntryAccess::MetadataOnly);
-                    if (!held.value()) throw std::runtime_error("cannot inspect retained tree directory");
-                    auto metadata = (*held.value())->inspect_basic();
-                    CK_CHECK(metadata.value() && metadata.value()->identity.value() &&
-                             receipt.staging_identity->matches_live(*metadata.value()->identity.value()));
-                    ++retained_directories;
-                    for (auto retained = target_after.begin(); retained != target_after.end();) {
-                        if (retained->first == staging || retained->first.starts_with(staging + "/")) {
-                            CK_CHECK(S_ISDIR(retained->second.mode) && retained->second.bytes.empty());
-                            retained = target_after.erase(retained);
-                        } else ++retained;
-                    }
-                }
-            }
-        }
-        if (tree_journal)
-            CK_CHECK((states == std::vector<OperationJournalState>{OperationJournalState::Planned,
-                OperationJournalState::Prepared, OperationJournalState::NeedsReconciliation}));
-        else {
-            CK_CHECK(states.size() == 1 || states.size() == 2);
-            CK_CHECK(states.front() == OperationJournalState::Planned);
-            if (states.size() == 2) CK_CHECK(states.back() == OperationJournalState::Prepared);
+    if (std::filesystem::exists(fixture.scratch.path() / "operation-journals")) {
+        for (const auto& entry : std::filesystem::directory_iterator(fixture.scratch.path() / "operation-journals")) {
+            const auto filename = entry.path().filename().native();
+            if (filename.starts_with(".ck-copy-journal-") || filename.starts_with(".ck-tree-journal-"))
+                ++journals;
         }
     }
-    CK_CHECK(journals == (marked_batch ? 2U : 1U) + retained_directories && retained_directories <= 1);
-    CK_CHECK(total_prepared == 1 + retained_directories);
-    if (retained_directories) {
-        // Creating this journal-identified private directory changes the parent
-        // times, not the identity/mode or any preexisting public child.
-        CK_CHECK(target_after.at(".").device == target_before.at(".").device &&
-                 target_after.at(".").inode == target_before.at(".").inode &&
-                 target_after.at(".").mode == target_before.at(".").mode);
-        target_after.at(".") = target_before.at(".");
-    }
-    CK_CHECK(target_after == target_before);
-    const auto retained_target = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right");
-    const auto journals_before = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "operation-journals");
+    CK_CHECK(journals == 0);
+    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right") == target_before);
     for (unsigned poll = 0; poll != 3; ++poll) fixture.application.step(fixture.clock.now_nanos());
-    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "operation-journals") == journals_before);
     CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
-    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right") == retained_target);
+    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right") == target_before);
 }
 #endif
 } // namespace

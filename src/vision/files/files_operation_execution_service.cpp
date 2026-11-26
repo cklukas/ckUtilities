@@ -307,6 +307,9 @@ struct FilesOperationExecutionService::State final {
                 "operation journal directory could not be scanned (" + detail.error.operation + ")",
                 std::nullopt,
                 std::nullopt,
+                std::nullopt,
+                std::nullopt,
+                std::nullopt,
                 std::nullopt});
             result.state = FilesOperationExecutionState::NeedsReconciliation;
             result.error = detail;

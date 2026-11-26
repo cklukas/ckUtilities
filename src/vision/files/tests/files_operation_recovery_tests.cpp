@@ -748,3 +748,156 @@ CK_TEST(files_operation_recovery_overlap_detects_unfinished_and_retained_source_
     const auto corrupt_hit = check_operation_recovery_overlap(root, *inv_beta, id_dst_b, id_src_b);
     CK_CHECK(corrupt_hit.value() && corrupt_hit.value()->has_untrusted_journal());
 }
+
+CK_TEST(files_operation_recovery_reconciliation_r02_r03_r04_catalog_and_request_review) {
+    const ck::testing::ScratchDirectory scratch("files-recovery-reconciliation-r02",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto src_dir = scratch.path() / "Photos-src";
+    const auto dst_dir = scratch.path() / "Photos-dst";
+    const auto journals = scratch.path() / "journals";
+    CK_CHECK(ck::io::create_directories(src_dir));
+    CK_CHECK(ck::io::create_directories(dst_dir));
+    CK_CHECK(ck::io::create_directories(journals));
+    CK_CHECK(ck::io::write_file(src_dir / "A.jpg", "photo-A-bytes"));
+    CK_CHECK(ck::io::write_file(src_dir / "B.jpg", "photo-B-bytes"));
+    CK_CHECK(ck::io::write_file(src_dir / "C.jpg", "photo-C-bytes"));
+    CK_CHECK(ck::io::write_file(dst_dir / "D.jpg", "photo-D-dest-only"));
+
+    const auto root = address(journals);
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+
+    const auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+
+    NativeFileSystem fs;
+    auto dir_src = fs.open_native_directory(address(src_dir)).take_value();
+    auto dir_dst = fs.open_native_directory(address(dst_dir)).take_value();
+    const auto id_src = *dir_src->identity().value();
+    const auto id_dst = *dir_dst->identity().value();
+    const auto dur_src = *NativeDurableIdentity::from_live(id_src);
+    const auto dur_dst = *NativeDurableIdentity::from_live(id_dst);
+
+    auto open_id = [&](DirectoryCursor &dir, const NativeName &name) {
+        auto h = dir.open_child(name, EntryAccess::MetadataOnly);
+        CK_CHECK(h.value());
+        return *(*h.value())->inspect_basic().value()->identity.value();
+    };
+    const auto id_a = open_id(*dir_src, leaf("A.jpg", u"A.jpg"));
+    const auto id_b = open_id(*dir_src, leaf("B.jpg", u"B.jpg"));
+    const auto id_c = open_id(*dir_src, leaf("C.jpg", u"C.jpg"));
+
+    OperationJournalId jid = journal_id();
+    jid.bytes[1] = std::byte{0x42};
+    auto created = OperationJournal::create(FileOperation::Move, jid, {8, 64, 16 * 1024});
+    CK_CHECK(created.value());
+    auto journal = std::move(created).take_value();
+    const auto jname = leaf(".ck-move-journal-r02", u".ck-move-journal-r02");
+    auto jfile = open_native_operation_journal_file(root, jname, true).take_value();
+
+    auto make_ev = [&](const char *sp, const char16_t *sw, const char *np, const char16_t *nw,
+                       const ObjectIdentity &obj) {
+        NativeOperationRecoveryEvidence ev{
+            leaf(sp, sw), leaf(np, nw), dur_src, *NativeDurableIdentity::from_live(obj), dur_dst,
+            std::nullopt, address(dst_dir), std::nullopt, std::nullopt, StagingNamespace::Named, leaf(np, nw)};
+        return *encode_native_operation_recovery_evidence(ev).value();
+    };
+
+    const auto ev_a = make_ev(".ck-stg-a", u".ck-stg-a", "A.jpg", u"A.jpg", id_a);
+    const auto ev_b = make_ev(".ck-stg-b", u".ck-stg-b", "B.jpg", u"B.jpg", id_b);
+    const auto ev_c = make_ev(".ck-stg-c", u".ck-stg-c", "C.jpg", u"C.jpg", id_c);
+
+    std::uint64_t seq = 1;
+    // Item 0 (A): DestinationCommitted
+    for (const auto st : {OperationJournalState::Planned, OperationJournalState::Prepared, OperationJournalState::Copied,
+                          OperationJournalState::Verified, OperationJournalState::CommitIntended,
+                          OperationJournalState::DestinationCommitted}) {
+        CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 0, st, ev_a}).value());
+    }
+    // Item 1 (B): Prepared (partial staging)
+    for (const auto st : {OperationJournalState::Planned, OperationJournalState::Prepared}) {
+        CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 1, st, ev_b}).value());
+    }
+    // Item 2 (C): Planned (pending)
+    CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 2, OperationJournalState::Planned, ev_c}).value());
+    CK_CHECK(jfile->finish_io().value());
+
+    std::string journal_bytes_before;
+    CK_CHECK(ck::io::read_file(journals / ".ck-move-journal-r02", journal_bytes_before, 64 * 1024));
+
+    // R-03: 3x repeated recovery scans produce identical convergent classifications with zero journal mutation.
+    for (int repeat = 0; repeat < 3; ++repeat) {
+        const auto scan = discover_operation_recovery(root);
+        CK_CHECK(scan.value() && scan.value()->requires_reconciliation);
+        CK_CHECK(scan.value()->reconciliation_catalog.has_value());
+        CK_CHECK(scan.value()->journals.size() == 1 && scan.value()->journals[0].reconciliation.has_value());
+        if (!scan.value()->reconciliation_catalog || scan.value()->journals.empty() ||
+            !scan.value()->journals[0].reconciliation)
+            return;
+        const auto &rec = *scan.value()->journals[0].reconciliation;
+        CK_CHECK(rec.items.size() == 3);
+        CK_CHECK(rec.items[0].review == TransferRowReview::VerifyAndProtectCommittedDestination);
+        CK_CHECK(rec.items[1].review == TransferRowReview::PreserveUnpublishedStaging);
+        CK_CHECK(rec.items[2].review == TransferRowReview::RevalidateOriginalScope);
+
+        // R-02: ResumeRecorded -> ReviewRecordedAttempt
+        TransferRequestReviewInput resume_in;
+        resume_in.kind = TransferRequestKind::ResumeRecorded;
+        resume_in.recorded_journal = jid;
+        resume_in.recorded_item = 0;
+        const auto resume_res = review_operation_transfer_request(*scan.value(), resume_in);
+        CK_CHECK(resume_res.value() && resume_res.value()->disposition == TransferRequestDisposition::ReviewRecordedAttempt);
+
+        // R-02: RetryUnresolved on Move item B -> ReviewBlockedRetry (moves require reconciliation, not copy retry)
+        TransferRequestReviewInput retry_in;
+        retry_in.kind = TransferRequestKind::RetryUnresolved;
+        retry_in.recorded_journal = jid;
+        retry_in.recorded_item = 1;
+        const auto retry_res = review_operation_transfer_request(*scan.value(), retry_in);
+        CK_CHECK(retry_res.value() && retry_res.value()->disposition == TransferRequestDisposition::ReviewBlockedRetry);
+
+        // R-02: Destination-only D -> PreserveDestinationOnly
+        TransferRequestReviewInput dest_only_in;
+        dest_only_in.kind = TransferRequestKind::SubmitAgain;
+        dest_only_in.destination = TransferEntryAddress{dur_dst, leaf("D.jpg", u"D.jpg")};
+        const auto dest_only_res = review_operation_transfer_request(*scan.value(), dest_only_in);
+        CK_CHECK(dest_only_res.value() &&
+                 dest_only_res.value()->disposition == TransferRequestDisposition::PreserveDestinationOnly);
+
+        // R-02: SubmitAgain for A -> ReviewOverlappingAttempts, and assess_operation_recovery_overlap populates
+        // disposition + row_review + lineage from ck-core-fs-lib.
+        FrozenInventoryBuilder inv_builder(InventoryMountPolicy::DirectObjects, InventoryLinkPolicy::PreserveLinks);
+        CK_CHECK(inv_builder.add({address(src_dir / "A.jpg"), id_a, ObjectKind::RegularFile, {}, 13U,
+                                  LinkTraversalEvidence::NotLink, std::nullopt, {}}));
+        CK_CHECK(inv_builder.seal());
+        const auto inv_a = *inv_builder.completed().value();
+        const auto overlap = assess_operation_recovery_overlap(*scan.value(), *inv_a, id_dst, id_src);
+        CK_CHECK(overlap.has_conflict() && !overlap.conflicts.empty());
+        if (!overlap.conflicts.empty()) {
+            CK_CHECK(overlap.conflicts.front().disposition == TransferRequestDisposition::ReviewOverlappingAttempts);
+            CK_CHECK(overlap.conflicts.front().row_review == TransferRowReview::VerifyAndProtectCommittedDestination);
+            CK_CHECK(overlap.conflicts.front().lineage == TransferLineageStatus::Unrecorded);
+        }
+    }
+
+    std::string journal_bytes_after;
+    CK_CHECK(ck::io::read_file(journals / ".ck-move-journal-r02", journal_bytes_after, 64 * 1024));
+    CK_CHECK(journal_bytes_after == journal_bytes_before);
+
+    // R-04: Corrupt journal alongside valid journal records journal_error in catalog and fails closed.
+    CK_CHECK(write_fixture_journal_bytes(root, leaf(".ck-copy-journal-r04-corrupt", u".ck-copy-journal-r04-corrupt"),
+                                         "corrupt-payload"));
+    const auto r04_scan = discover_operation_recovery(root);
+    CK_CHECK(r04_scan.value() && r04_scan.value()->reconciliation_catalog.has_value());
+    bool found_corrupt_catalog_entry = false;
+    for (const auto &j : r04_scan.value()->reconciliation_catalog->journals)
+        if (j.journal_error.has_value())
+            found_corrupt_catalog_entry = true;
+    CK_CHECK(found_corrupt_catalog_entry);
+}

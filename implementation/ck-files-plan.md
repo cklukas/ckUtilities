@@ -598,9 +598,14 @@ flows; their cross-platform release qualification remains in WP-07/WP-08.
   review and recovery-inspector handoff while allowing disjoint transfers),
   syncs unmarked single-row focus before planning, and qualifies conservative
   foreign partial-folder merge across macOS, Linux, and Windows Release plus
-  macOS and Linux ASan/UBSan and ThreadSanitizer. Backend-qualified original-job
-  resume and linked-retry execution remain open under B-03. See the
-  [reconciliation qualification record](ck-files-progress.md#2026-11-24--reconciliation-aware-repeat-planning-and-windows-conpty-runtime-qualification).
+  macOS and Linux ASan/UBSan and ThreadSanitizer. Pinned `ck-core-fs-lib`
+  `84dff7c` wires `inspect_transfer_journals` and `review_transfer_request`
+  (B-03) directly into `discover_operation_recovery`,
+  `assess_operation_recovery_overlap`, `review_operation_transfer_request`, and
+  the `Reconciliation required` / `Operation recovery review` dialogs across
+  macOS, Linux, and Windows (R-02/R-03/R-04). Execution-side original-job
+  resume and linked-retry actions remain gated under B-03. See the
+  [reconciliation qualification record](ck-files-progress.md#2026-11-26--pin-ck-core-fs-lib-84dff7c-preflight-v1v2-same-object-receipts-b-03-reconciliation-b-05-cross-process-coordination-across-macos-linux-and-windows).
 
 Acceptance: tests demonstrate separate consent for missing ADS/resource forks,
 ACL/security changes, sparse expansion, timestamp precision, hard-link loss,
@@ -666,8 +671,14 @@ always states its irreversibility; cancellation outcomes reflect actual effects.
 - [ ] Expose Resume recorded job and Retry unresolved items only after backend
   reconciliation; neither is an unqualified repeat of Copy/Move. Show confirmed
   copies, remaining sources, retained versions and unknown outcomes separately.
-- [ ] Coordinate conflicting jobs across Files and other backend consumers;
+- [~] Coordinate conflicting jobs across Files and other backend consumers;
   in-process UI serialization is insufficient for a shared backend (B-05).
+  Cross-process OS-level ancestor/root lock coordination via
+  `open_native_sync_session_backend` (including crash-abandoned lock release
+  after `SIGKILL` / `TerminateProcess`) is qualified across macOS, Linux, and
+  Windows (`wp07_cross_process_sync_session_coordination_blocks_overlapping_consumer`,
+  R-11); wiring live root leases across arbitrary non-sync transfer commands
+  remains open.
 
 Acceptance: full workflows work without function keys or mouse; focus returns
 correctly after dialogs, active jobs survive pane navigation, close is safe,
