@@ -681,7 +681,10 @@ reported. All first-release features are present with no placeholder actions.
   ext4/XFS/Btrfs archive fixtures, APFS sparse/resource-fork/xattr/ACL source
   capture, Windows ReFS and NTFS native feature suites (38/38
   `test_files_*_native` on both `V:` ReFS and isolated NTFS VHDX) plus live
-  interactive Windows 11 NTFS EFS encryption (`cipher /e`, AES-256), live exFAT
+  interactive Windows 11 NTFS EFS encryption (`cipher /e`, AES-256) and native
+  `ck_files_native_tests` live EFS observation/projection/read/refusal
+  (`native_windows_efs_encrypted_file_observation_and_capability_projection`),
+  live exFAT
   and FAT32 mounts on macOS/Windows plus Linux `vfat`, read-only and full-disk
   (`ENOSPC`) mounts across Linux and Windows (plus macOS read-only), a real
   Windows loopback SMB share (`\\127.0.0.1\...`), and a real `rpi4` NFSv4.2

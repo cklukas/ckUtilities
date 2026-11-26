@@ -16,7 +16,11 @@
 #include <winternl.h>
 #include <bit>
 #include <winioctl.h>
+#include <cstdlib>
 #include <cstring>
+#include <string_view>
+#include "object_inventory_job.hpp"
+#include "source_capability_projection.hpp"
 #include "windows_junction.hpp"
 #include "windows_name.hpp"
 #else
@@ -280,6 +284,117 @@ CK_TEST(native_windows_compressed_file_observation_matches_volume_advertisement_
                      storage.windows_compression.unavailable_detail()->error.code == query_err);
         }
         std::cout << "native-storage: volume does not advertise FileCompression (win32=" << compress_err << ")\n";
+    }
+}
+
+CK_TEST(native_windows_efs_encrypted_file_observation_and_capability_projection) {
+    char* root_buf = nullptr;
+    std::size_t root_len = 0;
+    std::filesystem::path scratch_base = ck::testing::scratch_root();
+    if (_dupenv_s(&root_buf, &root_len, "CKFILES_EFS_SCRATCH_ROOT") == 0 && root_buf != nullptr && root_buf[0] != '\0')
+        scratch_base = std::filesystem::path(root_buf);
+    std::free(root_buf);
+    const ck::testing::ScratchDirectory scratch("files-storage-ntfs-efs", scratch_base);
+    const auto path = scratch.path() / L"efs-secret.bin";
+    const auto ext = windows_extended_path(path.native());
+    CK_CHECK(ext.has_value());
+    if (!ext) return;
+
+    constexpr std::size_t payload_bytes = 4096;
+    std::string payload(payload_bytes, '\0');
+    for (std::size_t i = 0; i < payload_bytes; ++i)
+        payload[i] = static_cast<char>('A' + (i % 26));
+
+    {
+        const HANDLE writer = CreateFileW(ext->c_str(), GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (writer == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot create EFS fixture");
+        struct Close { HANDLE handle; ~Close() { CloseHandle(handle); } } close_writer{writer};
+        DWORD written = 0;
+        if (!WriteFile(writer, payload.data(), static_cast<DWORD>(payload.size()), &written, nullptr) ||
+            written != payload.size() || !FlushFileBuffers(writer))
+            throw std::runtime_error("cannot write EFS fixture");
+    }
+
+    char* req_buf = nullptr;
+    std::size_t req_len = 0;
+    const bool require_live_efs =
+        (_dupenv_s(&req_buf, &req_len, "CKFILES_REQUIRE_LIVE_EFS") == 0 && req_buf != nullptr &&
+         std::string_view(req_buf) == "1");
+    std::free(req_buf);
+
+    NativeFileSystem filesystem;
+    auto parent = filesystem.open_directory(scratch.path());
+    const auto loc = required(required(parent)->inspect_location());
+    const auto advertised = required(advertised_feature(loc.features, VolumeFeature::FileEncryption));
+
+    const BOOL encrypt_ok = EncryptFileW(ext->c_str());
+    const DWORD encrypt_err = encrypt_ok ? ERROR_SUCCESS : GetLastError();
+
+    auto opened = open_entry(filesystem, path,
+        EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndSecurity | EntryAccess::ContentRead);
+    const auto basic = required(opened->inspect_basic());
+    const auto storage = required(opened->inspect_storage());
+
+    ObjectInventoryJob job(open_entry(filesystem, path,
+        EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndSecurity));
+    std::optional<ObjectInventoryJob::Result> inv_result;
+    for (int i = 0; i < 100; ++i) {
+        const auto state = job.advance();
+        if (state == ObjectInventoryJobState::Complete) {
+            inv_result = std::move(job.completed()).take_value();
+            break;
+        }
+        if (state == ObjectInventoryJobState::Failed)
+            throw std::runtime_error("EFS object inventory job failed");
+    }
+    CK_CHECK(inv_result.has_value());
+    if (!inv_result) return;
+    const auto evidence_obs = SourceCapabilityProjection::from_inventory(0, (*inv_result)->data());
+    const auto& evidence = required(evidence_obs);
+    const SourceCapabilityEvidence* efs_evidence = nullptr;
+    for (const auto& item : evidence) {
+        if (item.feature == PreservationFeature::StorageRepresentation &&
+            item.destination_feature == VolumeFeature::FileEncryption) {
+            efs_evidence = &item;
+            break;
+        }
+    }
+
+    if (encrypt_ok != FALSE) {
+        CK_CHECK(advertised == FeatureAdvertisement::Advertised);
+        const DWORD win_attrs = GetFileAttributesW(ext->c_str());
+        CK_CHECK(win_attrs != INVALID_FILE_ATTRIBUTES && (win_attrs & FILE_ATTRIBUTE_ENCRYPTED) != 0);
+        CK_CHECK((required(basic.windows_attributes) & FILE_ATTRIBUTE_ENCRYPTED) != 0);
+        CK_CHECK(required(reported_storage_flag(storage, StorageFeature::EncryptionFlag)) == ReportedFlag::Set);
+        CK_CHECK(efs_evidence != nullptr);
+        if (efs_evidence) {
+            CK_CHECK(efs_evidence->state == SourceCapabilityState::Present);
+            CK_CHECK(efs_evidence->consequence == PreservationConsequence::RepresentationChange);
+            CK_CHECK(efs_evidence->hard_if_missing);
+        }
+        const auto read_obs = opened->read_content({payload_bytes + 64}, 0);
+        const auto& content = required(read_obs);
+        CK_CHECK(content.complete);
+        CK_CHECK(content.bytes.size() == payload_bytes);
+        CK_CHECK(std::memcmp(content.bytes.data(), payload.data(), payload_bytes) == 0);
+        const auto ordinary = opened->qualify_ordinary_regular_metadata();
+        CK_CHECK(!ordinary.value() || !*ordinary.value());
+        std::cout << "native-storage: Windows live EFS qualified (FILE_ATTRIBUTE_ENCRYPTED + EncryptionFlag + "
+                     "SourceCapabilityProjection::FileEncryption + ContentRead=" << content.bytes.size()
+                  << "B + ordinary_metadata_refused=" << (!ordinary.value() || !*ordinary.value() ? "true" : "false")
+                  << ")\n";
+    } else if (advertised != FeatureAdvertisement::Advertised) {
+        CK_CHECK(!require_live_efs);
+        CK_CHECK(required(reported_storage_flag(storage, StorageFeature::EncryptionFlag)) == ReportedFlag::Clear);
+        CK_CHECK(efs_evidence == nullptr);
+        std::cout << "native-storage: volume does not advertise FileEncryption (win32=" << encrypt_err << ")\n";
+    } else {
+        CK_CHECK(!require_live_efs);
+        CK_CHECK(required(reported_storage_flag(storage, StorageFeature::EncryptionFlag)) == ReportedFlag::Clear);
+        CK_CHECK(efs_evidence == nullptr);
+        std::cout << "native-storage: NTFS advertises FileEncryption but EncryptFileW unavailable in this session "
+                     "(win32=" << encrypt_err << ")\n";
     }
 }
 #elif defined(__APPLE__)
