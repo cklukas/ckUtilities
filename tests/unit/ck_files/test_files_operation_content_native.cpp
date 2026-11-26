@@ -12,6 +12,9 @@
 #include "stream_copy_job.hpp"
 #include "operation_journal_file.hpp"
 #include "staging_file.hpp"
+#if defined(_WIN32)
+#include "windows_name.hpp"
+#endif
 
 #include <cvision/testing/cktest.hpp>
 
@@ -229,15 +232,23 @@ CK_TEST(native_operation_staging_cleanup_requires_handle_bound_disposition) {
     const auto metadata = take(staging->inspect_basic());
     CK_CHECK(metadata.identity.value());
     if (!metadata.identity.value()) return;
-    const auto discarded = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
-    staging.reset();
 #if defined(_WIN32)
+    // Exclusive staging creation denies concurrent DELETE sharing while the
+    // staging writer handle remains open; cleanup succeeds only once the handle
+    // is released and then deletes through handle-bound disposition.
+    const auto busy_discard = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
+    CK_CHECK(!busy_discard.value() && busy_discard.state() == ObservationState::Denied);
+    CK_CHECK(fs::exists(scratch.path() / "owned-staging.bin"));
+    staging.reset();
+    const auto discarded = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
     if (!discarded.value())
         throw std::runtime_error("staging discard failed: " + discarded.unavailable_detail()->error.operation);
     if (fs::exists(scratch.path() / "owned-staging.bin"))
         throw std::runtime_error("staging discard remained present");
     CK_CHECK(discarded.value() && !fs::exists(scratch.path() / "owned-staging.bin"));
 #else
+    const auto discarded = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
+    staging.reset();
     CK_CHECK(!discarded.value() && discarded.state() == ObservationState::Unsupported &&
              fs::exists(scratch.path() / "owned-staging.bin"));
 #endif
@@ -789,17 +800,11 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     refused.destination_names = {name("first-copy.bin")};
     refused.journal_root = journal_root;
     refused.journal_id.bytes[0] = std::byte{0x70};
-#if defined(__linux__)
     unsigned refused_journal_calls = 0;
     refused.open_journal = [&](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
         ++refused_journal_calls;
         return open_native_operation_journal_file(root, basename, create_new);
     };
-#else
-    refused.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
-        return open_native_operation_journal_file(root, basename, create_new);
-    };
-#endif
     auto refused_created = create_native_operation_copy_batch(std::move(refused));
 #if defined(__linux__)
     // CompleteMetadataV1 is the default; this ordinary unprivileged fixture
@@ -815,18 +820,16 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     CK_CHECK(refused_created.unavailable_detail() && refused_created.unavailable_detail()->error.domain == ErrorDomain::Adapter);
     CK_CHECK(refused_created.unavailable_detail() && refused_created.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::ProviderReviewRequired));
     CK_CHECK(refused_created.unavailable_detail() && refused_created.unavailable_detail()->error.operation == "metadata_replay.complete_security_coverage_unproved");
-    CK_CHECK(fs::is_empty(destination_directory_path));
+    CK_CHECK(refused_journal_calls == 0 && fs::is_empty(destination_directory_path));
 #else
-    CK_CHECK(refused_created.value());
-    if (!refused_created.value()) return;
-    auto refused_batch = std::move(refused_created).take_value();
-    for (unsigned step = 0; step != 300 && refused_batch->state() != OperationBatchState::Complete &&
-         refused_batch->state() != OperationBatchState::Failed &&
-         refused_batch->state() != OperationBatchState::Cancelled; ++step)
-        refused_batch->advance();
-    CK_CHECK(refused_batch->state() == OperationBatchState::Failed);
-    CK_CHECK(!fs::exists(destination_directory_path / "first-copy.bin"));
-
+    // CompleteMetadataV1 is the default; without loss consent or full-security
+    // capture authority, source preflight refuses before creating a journal or
+    // writing to the destination.
+    CK_CHECK(!refused_created.value());
+    CK_CHECK(refused_created.state() == ObservationState::Denied ||
+             refused_created.state() == ObservationState::Unsupported);
+    CK_CHECK(refused_created.unavailable_detail() != nullptr);
+    CK_CHECK(refused_journal_calls == 0 && fs::is_empty(destination_directory_path));
 #endif
 
     NativeOperationCopyBatchRequest request;
@@ -1249,14 +1252,20 @@ CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_c
     auto substituted = take(directory->create_child_file(name("substituted.bin")));
     CK_CHECK(take(substituted->write_content(0, bytes)) == bytes.size());
     CK_CHECK(take(substituted->flush_content()));
-    fs::rename(scratch.path() / "substituted.bin", scratch.path() / "substituted.retired");
-    {
-        std::ofstream replacement(scratch.path() / "substituted.bin", std::ios::binary);
-        replacement << "replacement";
+    // Exclusive Windows staging denies FILE_SHARE_DELETE from creation,
+    // blocking external rename/substitution with ERROR_SHARING_VIOLATION while
+    // the staging handle is held.
+    const auto src_ext = windows_extended_path((scratch.path() / L"substituted.bin").native());
+    const auto dst_ext = windows_extended_path((scratch.path() / L"substituted.retired").native());
+    CK_CHECK(src_ext.has_value() && dst_ext.has_value());
+    if (src_ext && dst_ext) {
+        const BOOL renamed = MoveFileExW(src_ext->c_str(), dst_ext->c_str(), 0);
+        const DWORD rename_err = renamed ? ERROR_SUCCESS : GetLastError();
+        CK_CHECK(renamed == FALSE && rename_err == ERROR_SHARING_VIOLATION);
     }
-    const auto changed = substituted->publish_noreplace(*directory, name("substituted.published"));
-    CK_CHECK(!changed.value() && changed.state() == ObservationState::Changed &&
-             fs::exists(scratch.path() / "substituted.retired") && fs::exists(scratch.path() / "substituted.bin"));
+    CK_CHECK(fs::exists(scratch.path() / "substituted.bin") && !fs::exists(scratch.path() / "substituted.retired"));
+    CK_CHECK(take(substituted->publish_noreplace(*directory, name("substituted.published"))));
+    CK_CHECK(!fs::exists(scratch.path() / "substituted.bin") && fs::exists(scratch.path() / "substituted.published"));
 #endif
 }
 

@@ -1,5 +1,125 @@
 # Files implementation evidence
 
+## 2026-11-25 — Windows x64 WP-07 benchmark, fuzzing, NTFS/ReFS native matrix, and WP-08 ZIP/ConPTY packaging qualification
+
+On the Windows workstation (`V:` Dev Drive, observed `ReFS`, plus a disposable
+256 MiB `NTFS` VHDX labeled `CKFEA05SCOPE` mounted beneath `V:\tmp\...`),
+commit `424d66d` (plus the native Windows test additions/alignments below) was
+built and qualified with MSVC `19.44.35228.0` x64 (`MultiThreaded`), a locally
+built MSVC-matched `ckVision 2.1.0` SDK (`3d018210`, `cvision.lib` SHA-256
+`1884e353a8bce179e394be998fbe57ceca64a969242fad5f7c085a45ddf4d25a`, 61.01 s),
+and pinned `ck-core-fs-lib` `d51e5a0`.
+
+### Measured 100,000-entry scale & responsiveness budgets on Windows x64 (`files_bench`, Release)
+
+| Metric (100,000 entries, Release Timed) | Windows x64 (`V:`, MSVC 19.44) | Budget / gate |
+| --- | --- | --- |
+| Index scan (`files_index_scan_100k`) | 5.38 s | completes within budget |
+| Size-descending reorder (`files_index_sort_100k`) | 4.49 s | completes within budget |
+| 40-row page slice (`files_page_slice_100k`) | 366.5 µs/op | sub-millisecond paging |
+| Steady 140×40 grid render (`files_grid_steady_render_100k`) | 602.2 µs/op | 5600/5600 cells, 0 idle bytes |
+| Filter 100,000 → 1,299 (`files_index_filter_100k`) | 315.0 ms | interactive filter latency |
+| 1,000-journal overlap (`files_recovery_overlap_1000`) | 7.40 µs/op | sub-10 µs repeat gate |
+| Published index bytes | 30,400,000 B (29.0 MiB) | ≤ 134,217,728 B (128 MiB) |
+| Peak backing bytes | 134,400,000 B (128.2 MiB) | bounded private backing |
+| Peak RSS (`PeakWorkingSetSize`) | 158,332 KiB (154.6 MiB) | measured process RSS |
+
+- **`files_benchmark_smoke` (`--gate`) and decoder fuzzing**:
+  `verify_ckvision_package` passed `1/1` (`1.48 s`), `files_benchmark_smoke`
+  passed (`14.38 s`, peak RSS `157,444 KiB`, checksum `202343`, timed checksum
+  `248499`), and `ck_vision_files_decoder_fuzz_tests` passed `5/5` (`2.21 s`).
+- **Full Windows CTest sweep & NTFS/ReFS native feature matrix**:
+  The initial 372-test Windows sweep on `424d66d` passed `370/372` (including
+  `action_native_scope` on the isolated NTFS VHDX, all `ck-core-fs-lib` Windows
+  native suites, all `ck_vision_files_tests_0..3` shards, and
+  `ck_windows_tools_contract`) and exposed two stale pre-`d51e5a0` Windows test
+  expectations in `tests/unit/ck_files/`:
+  1. `test_files_security_native.cpp` checked `native_query_mask == BACKUP_SECURITY_INFORMATION`
+     when `SeSecurityPrivilege` was held, whereas pinned `d51e5a0` queries the
+     full 9-class persistent security mask (`OWNER | GROUP | DACL | SACL |
+     LABEL | ATTRIBUTE | SCOPE | PROCESS_TRUST_LABEL | ACCESS_FILTER`).
+  2. `test_files_operation_content_native.cpp` expected `discard_child` and
+     external `rename` to succeed while a `create_child_file` staging handle
+     was still open and expected `create_native_operation_copy_batch` to defer
+     missing-consent refusal past preflight, whereas `d51e5a0` enforces
+     `FILE_SHARE_READ`-only exclusion from creation and refuses in preflight.
+  Both expectations were updated to assert the stronger `d51e5a0` contracts,
+  and five new native Windows matrix tests were added across
+  `test_files_links_native.cpp`, `test_files_storage_native.cpp`,
+  `test_files_location_native.cpp`, and `test_files_native.cpp` (all using
+  `ck::files::windows_extended_path` and wide/handle Win32 APIs):
+  - **ADS**: `test_files_channels_native` (64 streams, unpaired UTF-16
+    surrogate, 10 MiB stream, owner pinning across rename/unlink, directory ADS)
+    + `ck-core-fs-lib` `native_metadata_stream_target_windows_tests` — passed on
+    both ReFS and NTFS.
+  - **ACL / security**: `test_files_security_native` (protected DACL, integrity
+    label, full 9-class persistent security descriptor, owner pinning) +
+    `native_sync_security_semantics_tests` — passed on both ReFS and NTFS.
+  - **Sparse & compressed files**: `test_files_storage_native` +
+    `test_files_layout_native` (`FSCTL_SET_SPARSE`, `FSCTL_QUERY_ALLOCATED_RANGES`
+    on 8 MiB sparse files) and new `FSCTL_SET_COMPRESSION` test — passed on
+    NTFS (`logical=131072`, `compressed=8192`, `format=2` LZNT1,
+    `CompressionFlag=Set`) and verified explicit `NotAdvertised` + refusal on
+    ReFS.
+  - **Hard links**: `test_files_native` (`link_count >= 2`, shared
+    `ObjectIdentity`) + `hardlink_source_capture` — passed on both ReFS and NTFS.
+  - **Symlinks & junctions**: `test_files_links_native` +
+    `test_files_directory_native` — junctions (`IO_REPARSE_TAG_MOUNT_POINT`),
+    opaque GUID reparse points, and new native file/directory/absolute/relative/dangling
+    symlinks (`CreateSymbolicLinkW`, `IO_REPARSE_TAG_SYMLINK`,
+    `WindowsReparseKind::SymbolicLink`, no-follow + explicit `FollowFinalLink`)
+    — passed on both ReFS and NTFS.
+  - **Case-sensitive directories**: new `FileCaseSensitiveInfo`
+    (`FILE_CS_FLAG_CASE_SENSITIVE_DIR`) test in `test_files_location_native`
+    verifying `case_sensitive_directory == true`, distinct `Alpha.txt` and
+    `alpha.txt` `ObjectIdentity` and exact enumeration/open — passed on both
+    NTFS and ReFS.
+  - **Long & UNC paths**: `test_files_native` (`\\?\`, `\\?\Volume{...}\`,
+    new >300-char unprefixed and extended DOS path with non-ASCII UTF-16
+    `雪`, new ordinary and >280-char loopback `\\127.0.0.1\...` /
+    `\\?\UNC\127.0.0.1\...` with non-ASCII UTF-16 `雪` when reachable) +
+    `test_files_native_walk` — passed on both ReFS and NTFS.
+  - **Sharing violations**: `test_files_directory_native` (`ERROR_SHARING_VIOLATION`
+    on directory open), `test_files_security_native` (`NTSTATUS 0xC0000043`
+    writer-open refusal on `MoveSource`), and `test_files_operation_content_native`
+    (exclusive staging denies concurrent `discard_child` and `MoveFileExW`
+    rename with `ERROR_SHARING_VIOLATION`, plus `refused_journal_calls == 0` on
+    missing-consent preflight) — passed on both ReFS and NTFS.
+  - **Recycle Bin**: `test_files_native` (file and directory tree `$Recycle.Bin`
+    `$I`/`$R` metadata + restore) and `action_native_scope` (scoped Recycle Bin
+    + restore on isolated NTFS VHDX) — passed on both ReFS and NTFS.
+  - **EFS (Session-0 note)**: `VolumeFeature::FileEncryption` advertisement is
+    verified (`NotAdvertised` on ReFS, `Advertised` on NTFS), while live
+    `cipher /e` returned `Access is denied` in non-interactive SSH Session 0;
+    live EFS encryption remains open for an interactive user session.
+  All `38/38` `test_files_*_native` suites passed on both ReFS (`V:`, `13.74 s`)
+  and NTFS (VHDX on `V:\tmp`, `13.69 s`).
+- **WP-08 Windows ZIP packaging & unpacked ConPTY verification**:
+  Built the production `BUILD_TESTING=OFF` tree (`334/334` targets, `217.35 s`,
+  290 compile commands SHA-256
+  `20db429f9101569ce8ff763aa2fb33f4398c4e03d10ec6a0567c1c7cb790102d`), ran
+  `cpack -G ZIP` producing `ck-utilities-0.2.0-windows-x64.zip` (`11,882,958`
+  bytes, SHA-256
+  `4f7037bb0fe31ec09b441f931f34872a9415d501b98645bb241261b22706e568`), verified
+  exact `bin,share` layout (10 tool guides, 30 screenshots, no dev/test
+  payloads), verified `--version` (`0.2.0 (ckVision 2.1.0)`, rc=0) and `--help`
+  (rc=0) on all 10 unpacked tools, and passed `ck_windows_package_tools_contract`
+  (`CKTOOLS_TEST_PACKAGE_IMAGE=1`) `3/3` in `8.20 s` in real ConPTY against an
+  isolated 283-character extended Unicode unpack path (`\\?\V:\tmp\...\packaged
+  tool address 雪\...\bin`) with zero binary or ZIP hash drift.
+- **Remaining Windows gate**: Console Session 1 remains owned by another user,
+  so interactive desktop-window visual inspection of `ck-files.exe` (and live
+  interactive-session EFS testing) remains open.
+
+| Evidence (Windows x64 `V:`, `424d66d` + NTFS/ReFS matrix tests) | SHA-256 |
+| --- | --- |
+| Local MSVC-built `ckVision 2.1.0` `cvision.lib` | `1884e353a8bce179e394be998fbe57ceca64a969242fad5f7c085a45ddf4d25a` |
+| `files_bench.exe` (100k timed + `--gate`) | `0dd7e19124cd89a91707198812e8d250fb962b3d7d109fb1f91591ee8469715d` |
+| `ck_vision_files_decoder_fuzz_tests.exe` (5/5) | `325c6317d1bcb9de9f48034ccbf68fb0b66fbaf3e6fe86b87159cdb08e68b113` |
+| Production `ck-utilities-0.2.0-windows-x64.zip` (`BUILD_TESTING=OFF`) | `4f7037bb0fe31ec09b441f931f34872a9415d501b98645bb241261b22706e568` |
+| Packaged `bin/ck-files.exe` (verified in ConPTY from >260 Unicode path) | `5802655f3fccd4f4472e02af8e58ce055c1288810063532a42fb993c808747f5` |
+| Production compile profile (290 commands) | `20db429f9101569ce8ff763aa2fb33f4398c4e03d10ec6a0567c1c7cb790102d` |
+
 ## 2026-11-24 — WP-07 100k scale benchmark, decoder fuzzing, and WP-08 packaging/docgen qualification
 
 Frontend `d69b033` adds the WP-07 100,000-entry scale and responsiveness

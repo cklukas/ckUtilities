@@ -15,6 +15,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include "windows_name.hpp"
 #else
 #include <fcntl.h>
 #include <unistd.h>
@@ -134,6 +135,89 @@ CK_TEST(native_windows_location_flags_limits_and_case_query_match_independent_sd
     CK_CHECK(required(info.space_accounting_unit) == static_cast<std::uint64_t>(sectors) * bytes);
     CK_CHECK(required(info.total_bytes) > 0);
     (void)required(info.free_bytes); (void)required(info.available_bytes);
+}
+
+CK_TEST(native_windows_case_sensitive_directory_reports_flag_and_keeps_distinct_case_siblings) {
+    const ck::testing::ScratchDirectory scratch("files-location-windows-case-sensitive");
+    const auto cs_dir = scratch.path() / L"cs";
+    const auto cs_ext = windows_extended_path(cs_dir.native());
+    CK_CHECK(cs_ext.has_value() && CreateDirectoryW(cs_ext->c_str(), nullptr) != FALSE);
+    if (!cs_ext) return;
+
+    const HANDLE dir_handle = CreateFileW(cs_ext->c_str(), FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | DELETE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (dir_handle == INVALID_HANDLE_VALUE)
+        throw std::runtime_error("cannot open case-sensitive directory fixture");
+    FILE_CASE_SENSITIVE_INFO cs_info{};
+    cs_info.Flags = FILE_CS_FLAG_CASE_SENSITIVE_DIR;
+    const BOOL set_ok = SetFileInformationByHandle(dir_handle, FileCaseSensitiveInfo, &cs_info, sizeof(cs_info));
+    const DWORD set_err = set_ok ? ERROR_SUCCESS : GetLastError();
+    CloseHandle(dir_handle);
+    if (!set_ok) {
+        if (set_err == ERROR_ACCESS_DENIED || set_err == ERROR_PRIVILEGE_NOT_HELD ||
+            set_err == ERROR_NOT_SUPPORTED || set_err == ERROR_INVALID_FUNCTION) {
+            std::cout << "native-location: FileCaseSensitiveInfo unavailable (win32=" << set_err << ")\n";
+            return;
+        }
+        throw std::runtime_error("unexpected FileCaseSensitiveInfo error: " + std::to_string(set_err));
+    }
+
+    const auto create_exclusive = [](const fs::path& file_path, std::string_view payload) {
+        const auto ext = windows_extended_path(file_path.native());
+        if (!ext) throw std::runtime_error("cannot form extended case-sensitive sibling path");
+        const HANDLE h = CreateFileW(ext->c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (h == INVALID_HANDLE_VALUE)
+            throw std::runtime_error("cannot create case-sensitive sibling: " + std::to_string(GetLastError()));
+        DWORD written = 0;
+        const BOOL ok = WriteFile(h, payload.data(), static_cast<DWORD>(payload.size()), &written, nullptr);
+        CloseHandle(h);
+        if (!ok || written != payload.size())
+            throw std::runtime_error("cannot write case-sensitive sibling");
+    };
+    const auto upper_path = cs_dir / L"Alpha.txt";
+    const auto lower_path = cs_dir / L"alpha.txt";
+    const auto upper_ext = windows_extended_path(upper_path.native());
+    const auto lower_ext = windows_extended_path(lower_path.native());
+    CK_CHECK(upper_ext.has_value() && lower_ext.has_value());
+    if (!upper_ext || !lower_ext) return;
+    struct Cleanup {
+        std::wstring a, b, dir;
+        ~Cleanup() {
+            DeleteFileW(a.c_str());
+            DeleteFileW(b.c_str());
+            RemoveDirectoryW(dir.c_str());
+        }
+    } cleanup{*upper_ext, *lower_ext, *cs_ext};
+    create_exclusive(upper_path, "UPPER");
+    create_exclusive(lower_path, "lower!");
+
+    NativeFileSystem filesystem;
+    auto cursor = open_directory(filesystem, cs_dir);
+    const auto loc = required(cursor->inspect_location());
+    CK_CHECK(required(loc.case_sensitive_directory) == true);
+
+    std::set<std::u16string> names;
+    for (;;) {
+        const auto batch = cursor->read(16);
+        for (const auto& entry : batch.names) {
+            CK_CHECK(entry.windows_units() != nullptr);
+            if (entry.windows_units()) names.insert(*entry.windows_units());
+        }
+        if (batch.state == DirectoryReadState::End) break;
+        CK_CHECK(batch.state == DirectoryReadState::More);
+    }
+    CK_CHECK(names.size() == 2 && names.contains(u"Alpha.txt") && names.contains(u"alpha.txt"));
+
+    auto upper_entry = cursor->open_child(*NativeName::from_windows(u"Alpha.txt"), EntryAccess::MetadataOnly);
+    auto lower_entry = cursor->open_child(*NativeName::from_windows(u"alpha.txt"), EntryAccess::MetadataOnly);
+    const auto upper_meta = required(required(upper_entry)->inspect_basic());
+    const auto lower_meta = required(required(lower_entry)->inspect_basic());
+    CK_CHECK(required(upper_meta.logical_size) == 5);
+    CK_CHECK(required(lower_meta.logical_size) == 6);
+    CK_CHECK(compare_identity(required(upper_meta.identity), required(lower_meta.identity)) == IdentityComparison::Different);
+    std::cout << "native-location: Windows per-directory case sensitivity qualified\n";
 }
 #else
 CK_TEST(native_posix_location_queries_match_descriptor_mount_and_pathconf_results) {

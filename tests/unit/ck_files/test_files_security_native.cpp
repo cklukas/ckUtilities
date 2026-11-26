@@ -324,7 +324,12 @@ CK_TEST(native_windows_full_security_access_matches_native_rights_without_privil
     } else {
         CloseHandle(reference);
         const auto value = required(opened)->read_security(SecurityPart::WindowsFullDescriptor);
-        CK_CHECK(required(value).native_query_mask == BACKUP_SECURITY_INFORMATION);
+        constexpr SECURITY_INFORMATION expected_mask =
+            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+            SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION | ATTRIBUTE_SECURITY_INFORMATION |
+            SCOPE_SECURITY_INFORMATION | PROCESS_TRUST_LABEL_SECURITY_INFORMATION |
+            ACCESS_FILTER_SECURITY_INFORMATION;
+        CK_CHECK(required(value).native_query_mask == expected_mask);
     }
 }
 #endif

@@ -18,6 +18,7 @@
 #include <winioctl.h>
 #include <cstring>
 #include "windows_junction.hpp"
+#include "windows_name.hpp"
 #else
 #include <sys/stat.h>
 #include <sys/xattr.h>
@@ -218,6 +219,68 @@ CK_TEST(native_windows_reported_offline_hint_requires_provider_review_before_att
         if (e) CK_CHECK(e->error.code == static_cast<std::int64_t>(AdapterError::ProviderReviewRequired));
     }
     if (!SetFileAttributesW(path.c_str(), original)) throw std::runtime_error("cannot restore offline-hint fixture");
+}
+
+CK_TEST(native_windows_compressed_file_observation_matches_volume_advertisement_and_compressed_size) {
+    const ck::testing::ScratchDirectory scratch("files-storage-ntfs-compression");
+    const auto path = scratch.path() / L"compressible.bin";
+    const auto ext = windows_extended_path(path.native());
+    CK_CHECK(ext.has_value());
+    if (!ext) return;
+    constexpr std::size_t payload_bytes = 131072;
+    const std::string data(payload_bytes, 'A');
+    const HANDLE writer = CreateFileW(ext->c_str(), GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (writer == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot create compression fixture");
+    struct Close { HANDLE handle; ~Close() { CloseHandle(handle); } } close_writer{writer};
+    DWORD written = 0;
+    if (!WriteFile(writer, data.data(), static_cast<DWORD>(data.size()), &written, nullptr) || written != data.size())
+        throw std::runtime_error("cannot write compression fixture");
+    USHORT format = COMPRESSION_FORMAT_DEFAULT;
+    DWORD returned = 0;
+    const BOOL compressed_ok = DeviceIoControl(writer, FSCTL_SET_COMPRESSION, &format, sizeof(format),
+        nullptr, 0, &returned, nullptr);
+    const DWORD compress_err = compressed_ok ? ERROR_SUCCESS : GetLastError();
+    (void)FlushFileBuffers(writer);
+
+    NativeFileSystem filesystem;
+    auto parent = filesystem.open_directory(scratch.path());
+    const auto loc = required(required(parent)->inspect_location());
+    const auto advertised = required(advertised_feature(loc.features, VolumeFeature::FileCompression));
+
+    auto opened = open_entry(filesystem, path);
+    const auto storage = required(opened->inspect_storage());
+    if (advertised == FeatureAdvertisement::Advertised) {
+        CK_CHECK(compressed_ok != FALSE);
+        CK_CHECK(required(reported_storage_flag(storage, StorageFeature::CompressionFlag)) == ReportedFlag::Set);
+        CK_CHECK(required(storage.logical_size) == payload_bytes);
+        const auto& comp = required(storage.windows_compression);
+        CK_CHECK(comp.format != COMPRESSION_FORMAT_NONE);
+        CK_CHECK(comp.compressed_file_size < payload_bytes);
+        FILE_COMPRESSION_INFO independent{};
+        CK_CHECK(GetFileInformationByHandleEx(writer, FileCompressionInfo, &independent, sizeof(independent)) != FALSE);
+        CK_CHECK(comp.compressed_file_size == static_cast<std::uint64_t>(independent.CompressedFileSize.QuadPart));
+        CK_CHECK(comp.format == independent.CompressionFormat);
+        std::cout << "native-storage: Windows compression qualified logical=" << payload_bytes
+                  << " compressed=" << comp.compressed_file_size << " format=" << comp.format << "\n";
+    } else {
+        CK_CHECK(compressed_ok == FALSE);
+        CK_CHECK(compress_err == ERROR_INVALID_FUNCTION || compress_err == ERROR_NOT_SUPPORTED);
+        CK_CHECK(required(reported_storage_flag(storage, StorageFeature::CompressionFlag)) == ReportedFlag::Clear);
+        FILE_COMPRESSION_INFO independent{};
+        const BOOL query_ok = GetFileInformationByHandleEx(writer, FileCompressionInfo, &independent, sizeof(independent));
+        const DWORD query_err = query_ok ? ERROR_SUCCESS : GetLastError();
+        if (query_ok) {
+            const auto& comp = required(storage.windows_compression);
+            CK_CHECK(comp.format == COMPRESSION_FORMAT_NONE);
+            CK_CHECK(comp.compressed_file_size == static_cast<std::uint64_t>(independent.CompressedFileSize.QuadPart));
+        } else {
+            CK_CHECK(!storage.windows_compression.value());
+            CK_CHECK(storage.windows_compression.unavailable_detail() &&
+                     storage.windows_compression.unavailable_detail()->error.code == query_err);
+        }
+        std::cout << "native-storage: volume does not advertise FileCompression (win32=" << compress_err << ")\n";
+    }
 }
 #elif defined(__APPLE__)
 CK_TEST(native_darwin_storage_observes_hidden_flag_live_without_changing_the_opened_owner) {

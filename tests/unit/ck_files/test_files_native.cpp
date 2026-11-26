@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -14,7 +15,9 @@
 #include "cvision/testing/cktest.hpp"
 #include "scratch_directory.hpp"
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#include "windows_name.hpp"
+#else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -656,5 +659,179 @@ CK_TEST(native_windows_times_preserve_exact_100ns_values) {
     const auto& modified = available(available(observed).modified);
     CK_CHECK(accessed.seconds() == 0 && accessed.nanoseconds() == 123'456'700U);
     CK_CHECK(modified.seconds() == 0 && modified.nanoseconds() == 123'456'700U);
+}
+
+CK_TEST(native_windows_deep_extended_dos_path_over_260_chars_inspects_and_enumerates_without_max_path_limit) {
+    const ck::testing::ScratchDirectory scratch("files-long-path");
+    struct Cleanup {
+        std::wstring file;
+        std::vector<std::wstring> dirs;
+        ~Cleanup() {
+            if (!file.empty()) DeleteFileW(file.c_str());
+            for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) RemoveDirectoryW(it->c_str());
+        }
+    } cleanup;
+    std::wstring current = scratch.path().native();
+    for (int depth = 0; depth < 8 && current.size() <= 320; ++depth) {
+        current += L"\\segment-long-directory-" + std::to_wstring(depth) + L"-0123456789abcdef";
+        const auto ext = windows_extended_path(current);
+        CK_CHECK(ext.has_value() && CreateDirectoryW(ext->c_str(), nullptr) != FALSE);
+        if (!ext) return;
+        cleanup.dirs.push_back(*ext);
+    }
+    CK_CHECK(current.size() > 300);
+    const std::wstring leaf_name = L"deep-leaf-\u96ea.bin";
+    const std::u16string leaf_name_u16 = u"deep-leaf-\u96ea.bin";
+    const std::wstring leaf_path = current + L"\\" + leaf_name;
+    const auto leaf_ext = windows_extended_path(leaf_path);
+    CK_CHECK(leaf_ext.has_value());
+    if (!leaf_ext) return;
+    cleanup.file = *leaf_ext;
+
+    {
+        const HANDLE h = CreateFileW(leaf_ext->c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        CK_CHECK(h != INVALID_HANDLE_VALUE);
+        if (h == INVALID_HANDLE_VALUE) return;
+        const char payload[] = "deep-extended-payload";
+        DWORD written = 0;
+        CK_CHECK(WriteFile(h, payload, static_cast<DWORD>(sizeof(payload) - 1), &written, nullptr) != FALSE &&
+                 written == sizeof(payload) - 1);
+        CloseHandle(h);
+    }
+
+    NativeFileSystem filesystem;
+    // Exercise both unprefixed >300-char DOS paths (verifying boundary
+    // conversion inside NativeFileSystem) and explicit extended-length paths.
+    const auto observed_dos = filesystem.inspect_basic(fs::path(leaf_path));
+    const auto observed_ext = filesystem.inspect_basic(fs::path(*leaf_ext));
+    const auto& meta = available(observed_dos);
+    const auto& meta_ext = available(observed_ext);
+    CK_CHECK(available(meta.kind) == ObjectKind::RegularFile && available(meta.logical_size) == 21);
+    CK_CHECK(available(meta_ext.kind) == ObjectKind::RegularFile && available(meta_ext.logical_size) == 21);
+    CK_CHECK(compare_identity(available(meta.identity), available(meta_ext.identity)) == IdentityComparison::Same);
+
+    const auto dir_ext = windows_extended_path(current);
+    CK_CHECK(dir_ext.has_value());
+    for (const fs::path& dir_candidate : {fs::path(current), fs::path(*dir_ext)}) {
+        auto cursor_obs = filesystem.open_directory(dir_candidate);
+        CK_CHECK(cursor_obs.value() != nullptr);
+        if (cursor_obs.value()) {
+            auto cursor = std::move(cursor_obs).take_value();
+            const auto batch = cursor->read(16);
+            CK_CHECK(batch.state == DirectoryReadState::End && batch.names.size() == 1 &&
+                     batch.names[0] == *NativeName::from_windows(leaf_name_u16));
+            auto child_obs = cursor->open_child(*NativeName::from_windows(leaf_name_u16), EntryAccess::MetadataOnly);
+            const auto child_meta = available(available(child_obs)->inspect_basic());
+            CK_CHECK(compare_identity(available(meta.identity), available(child_meta.identity)) == IdentityComparison::Same);
+        }
+    }
+    std::cout << "native-files: Windows >260 DOS path qualified len=" << leaf_path.size() << "\n";
+}
+
+CK_TEST(native_windows_loopback_unc_path_inspects_and_enumerates_when_share_is_reachable) {
+    const ck::testing::ScratchDirectory scratch("files-unc-loopback");
+    const auto local_file = scratch.path() / L"unc-fixture-\u96ea.bin";
+    const std::u16string local_name_u16 = u"unc-fixture-\u96ea.bin";
+    const auto local_ext = windows_extended_path(local_file.native());
+    CK_CHECK(local_ext.has_value());
+    if (!local_ext) return;
+    {
+        const HANDLE h = CreateFileW(local_ext->c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        CK_CHECK(h != INVALID_HANDLE_VALUE);
+        if (h == INVALID_HANDLE_VALUE) return;
+        const char payload[] = "unc-loopback-data";
+        DWORD written = 0;
+        CK_CHECK(WriteFile(h, payload, static_cast<DWORD>(sizeof(payload) - 1), &written, nullptr) != FALSE &&
+                 written == sizeof(payload) - 1);
+        CloseHandle(h);
+    }
+
+    auto preferred = local_file;
+    preferred.make_preferred();
+    std::wstring native_parent = preferred.parent_path().native();
+    if (native_parent.starts_with(L"\\\\?\\")) native_parent.erase(0, 4);
+    if (native_parent.size() < 3 || native_parent[1] != L':' || native_parent[2] != L'\\') {
+        std::cout << "native-files: Windows loopback UNC skipped (non-drive scratch root)\n";
+        return;
+    }
+
+    const std::wstring unc_dir = std::wstring(L"\\\\127.0.0.1\\") + native_parent[0] + L"$" +
+                                 native_parent.substr(2);
+    const std::wstring unc_file = unc_dir + L"\\unc-fixture-\u96ea.bin";
+    const auto unc_file_ext = windows_extended_path(unc_file);
+    const auto unc_dir_ext = windows_extended_path(unc_dir);
+    CK_CHECK(unc_file_ext.has_value() && unc_dir_ext.has_value());
+    if (!unc_file_ext || !unc_dir_ext) return;
+    CK_CHECK(unc_file_ext->starts_with(L"\\\\?\\UNC\\127.0.0.1\\"));
+
+    // Probe whether the local administrative loopback share is reachable.
+    const HANDLE probe = CreateFileW(unc_file_ext->c_str(), FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+        FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (probe == INVALID_HANDLE_VALUE) {
+        std::cout << "native-files: Windows loopback UNC share unavailable (win32=" << GetLastError() << ")\n";
+        return;
+    }
+    CloseHandle(probe);
+
+    NativeFileSystem filesystem;
+    const auto unc_meta = available(filesystem.inspect_basic(fs::path(unc_file)));
+    const auto unc_ext_meta = available(filesystem.inspect_basic(fs::path(*unc_file_ext)));
+    CK_CHECK(available(unc_meta.kind) == ObjectKind::RegularFile && available(unc_meta.logical_size) == 17);
+    CK_CHECK(available(unc_ext_meta.logical_size) == 17);
+    CK_CHECK(compare_identity(available(unc_meta.identity), available(unc_ext_meta.identity)) == IdentityComparison::Same);
+
+    for (const fs::path& dir_candidate : {fs::path(unc_dir), fs::path(*unc_dir_ext)}) {
+        auto unc_cursor = filesystem.open_directory(dir_candidate);
+        CK_CHECK(unc_cursor.value() != nullptr);
+        if (unc_cursor.value()) {
+            const auto batch = (*unc_cursor.value())->read(16);
+            CK_CHECK(batch.state == DirectoryReadState::End && batch.names.size() == 1 &&
+                     batch.names[0] == *NativeName::from_windows(local_name_u16));
+        }
+    }
+
+    // Exercise a >260-char UNC path through both ordinary \\server\share\...
+    // and extended \\?\UNC\server\share\... boundaries.
+    struct DeepCleanup {
+        std::wstring file;
+        std::vector<std::wstring> dirs;
+        ~DeepCleanup() {
+            if (!file.empty()) DeleteFileW(file.c_str());
+            for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) RemoveDirectoryW(it->c_str());
+        }
+    } deep_cleanup;
+    std::wstring deep_unc_dir = unc_dir;
+    for (int depth = 0; depth < 8 && deep_unc_dir.size() <= 300; ++depth) {
+        deep_unc_dir += L"\\unc-deep-segment-" + std::to_wstring(depth) + L"-0123456789abcdef";
+        const auto ext = windows_extended_path(deep_unc_dir);
+        CK_CHECK(ext.has_value() && CreateDirectoryW(ext->c_str(), nullptr) != FALSE);
+        if (!ext) return;
+        deep_cleanup.dirs.push_back(*ext);
+    }
+    CK_CHECK(deep_unc_dir.size() > 280);
+    const std::wstring deep_unc_file = deep_unc_dir + L"\\unc-deep-leaf-\u96ea.bin";
+    const auto deep_unc_file_ext = windows_extended_path(deep_unc_file);
+    CK_CHECK(deep_unc_file_ext.has_value());
+    if (!deep_unc_file_ext) return;
+    deep_cleanup.file = *deep_unc_file_ext;
+    {
+        const HANDLE h = CreateFileW(deep_unc_file_ext->c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        CK_CHECK(h != INVALID_HANDLE_VALUE);
+        if (h == INVALID_HANDLE_VALUE) return;
+        const char payload[] = "deep-unc-ok";
+        DWORD written = 0;
+        CK_CHECK(WriteFile(h, payload, static_cast<DWORD>(sizeof(payload) - 1), &written, nullptr) != FALSE &&
+                 written == sizeof(payload) - 1);
+        CloseHandle(h);
+    }
+    const auto deep_unc_meta = available(filesystem.inspect_basic(fs::path(deep_unc_file)));
+    const auto deep_unc_ext_meta = available(filesystem.inspect_basic(fs::path(*deep_unc_file_ext)));
+    CK_CHECK(available(deep_unc_meta.kind) == ObjectKind::RegularFile && available(deep_unc_meta.logical_size) == 11);
+    CK_CHECK(compare_identity(available(deep_unc_meta.identity), available(deep_unc_ext_meta.identity)) == IdentityComparison::Same);
+    std::cout << "native-files: Windows loopback UNC qualified deep_len=" << deep_unc_file.size() << "\n";
 }
 #endif

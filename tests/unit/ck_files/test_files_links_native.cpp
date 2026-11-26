@@ -17,8 +17,8 @@
 #include <bit>
 #include <cstring>
 #include <winioctl.h>
-#include <cstring>
 #include "windows_junction.hpp"
+#include "windows_name.hpp"
 #else
 #include <sys/stat.h>
 #include <sys/xattr.h>
@@ -185,6 +185,136 @@ CK_TEST(native_windows_opaque_guid_reparse_payload_is_retained_without_following
     std::memcpy(expected.bytes.data(), &header.guid, sizeof(header.guid));
     CK_CHECK(*value.owner_guid == expected);
     CK_CHECK(opened->read_link_metadata({128, 1}).state() == ObservationState::Unknown);
+}
+CK_TEST(native_windows_symbolic_link_metadata_preserves_file_directory_relative_and_dangling_targets_without_following) {
+    const ck::testing::ScratchDirectory scratch("files-links-windows-symlink");
+    const auto target_file = scratch.path() / L"target-file.txt";
+    const auto target_dir = scratch.path() / L"target-dir";
+    const auto file_link = scratch.path() / L"file-symlink";
+    const auto abs_file_link = scratch.path() / L"abs-file-symlink";
+    const auto dangling_link = scratch.path() / L"dangling-symlink";
+    const auto dir_link = scratch.path() / L"dir-symlink";
+    const auto write_extended_file = [](const fs::path& file_path, std::string_view payload) {
+        const auto ext = windows_extended_path(file_path.native());
+        if (!ext) throw std::runtime_error("cannot form extended symlink target fixture path");
+        const HANDLE h = CreateFileW(ext->c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (h == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot create symlink target fixture");
+        DWORD written = 0;
+        const BOOL ok = WriteFile(h, payload.data(), static_cast<DWORD>(payload.size()), &written, nullptr);
+        CloseHandle(h);
+        if (!ok || written != payload.size()) throw std::runtime_error("cannot write symlink target fixture");
+    };
+    write_extended_file(target_file, "fixture");
+    const auto target_dir_ext = windows_extended_path(target_dir.native());
+    CK_CHECK(target_dir_ext.has_value() && CreateDirectoryW(target_dir_ext->c_str(), nullptr) != FALSE);
+    if (!target_dir_ext) return;
+    write_extended_file(target_dir / L"inside.txt", "fixture");
+
+    const auto create_symlink = [](const fs::path& link_path, const std::wstring& target, DWORD flags) -> DWORD {
+        const auto ext = windows_extended_path(link_path.native());
+        if (!ext) throw std::runtime_error("cannot form extended symlink fixture path");
+        if (CreateSymbolicLinkW(ext->c_str(), target.c_str(), flags | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE))
+            return ERROR_SUCCESS;
+        const DWORD first_error = GetLastError();
+        if (CreateSymbolicLinkW(ext->c_str(), target.c_str(), flags))
+            return ERROR_SUCCESS;
+        return first_error;
+    };
+    const auto remove_link = [](const fs::path& path, bool is_dir) {
+        if (const auto ext = windows_extended_path(path.native())) {
+            if (is_dir) RemoveDirectoryW(ext->c_str());
+            else DeleteFileW(ext->c_str());
+        }
+    };
+    struct Cleanup {
+        fs::path a, b, c, d;
+        void (*fn)(const fs::path&, bool);
+        ~Cleanup() { fn(a, false); fn(b, false); fn(c, false); fn(d, true); }
+    } cleanup{file_link, abs_file_link, dangling_link, dir_link, remove_link};
+
+    const DWORD file_err = create_symlink(file_link, L"target-file.txt", 0);
+    if (file_err == ERROR_PRIVILEGE_NOT_HELD) {
+        std::cout << "native-links: Windows symlink privilege unavailable (ERROR_PRIVILEGE_NOT_HELD)\n";
+        return;
+    }
+    CK_CHECK(file_err == ERROR_SUCCESS);
+    if (file_err != ERROR_SUCCESS) return;
+    auto abs_target = target_file;
+    abs_target.make_preferred();
+    const std::wstring abs_target_w = abs_target.native();
+    const std::u16string abs_target_u16(abs_target_w.begin(), abs_target_w.end());
+    CK_CHECK(create_symlink(abs_file_link, abs_target_w, 0) == ERROR_SUCCESS);
+    CK_CHECK(create_symlink(dangling_link, L"..\\missing-target.bin", 0) == ERROR_SUCCESS);
+    CK_CHECK(create_symlink(dir_link, L"target-dir", SYMBOLIC_LINK_FLAG_DIRECTORY) == ERROR_SUCCESS);
+
+    NativeFileSystem filesystem;
+    const auto target_basic = filesystem.inspect_basic(target_file);
+    const auto target_id = required(required(target_basic).identity);
+
+    constexpr std::uint32_t kSymlinkFlagRelative = 1U;
+    for (const auto& [link_path, expected_target] :
+         {std::pair{file_link, std::u16string(u"target-file.txt")},
+          std::pair{dangling_link, std::u16string(u"..\\missing-target.bin")}}) {
+        const auto basic = filesystem.inspect_basic(link_path);
+        CK_CHECK(required(required(basic).kind) == ObjectKind::SymbolicLink);
+        CK_CHECK(required(required(basic).reparse_tag) == IO_REPARSE_TAG_SYMLINK);
+        CK_CHECK(required(basic).logical_size.state() == ObservationState::Unsupported);
+        CK_CHECK(compare_identity(required(required(basic).identity), target_id) == IdentityComparison::Different);
+
+        auto opened = open_entry(filesystem, link_path);
+        const auto meta = opened->read_link_metadata();
+        const auto* payload = std::get_if<WindowsReparseData>(&required(meta).payload);
+        CK_CHECK(payload && payload->kind == WindowsReparseKind::SymbolicLink);
+        if (payload) {
+            CK_CHECK(payload->tag == IO_REPARSE_TAG_SYMLINK && payload->names.has_value());
+            if (payload->names) {
+                CK_CHECK(payload->names->substitute == expected_target);
+                CK_CHECK(payload->names->print == expected_target);
+                CK_CHECK((payload->names->flags & kSymlinkFlagRelative) != 0);
+            }
+        }
+        const auto storage = opened->inspect_storage();
+        CK_CHECK(required(required(storage).kind) == ObjectKind::SymbolicLink);
+        CK_CHECK(required(storage).logical_size.state() == ObservationState::Unsupported);
+        CK_CHECK(required(storage).windows_compression.state() == ObservationState::Unsupported);
+    }
+
+    {
+        auto abs_opened = open_entry(filesystem, abs_file_link);
+        const auto abs_meta = abs_opened->read_link_metadata();
+        const auto* abs_payload = std::get_if<WindowsReparseData>(&required(abs_meta).payload);
+        CK_CHECK(abs_payload && abs_payload->kind == WindowsReparseKind::SymbolicLink && abs_payload->names.has_value());
+        if (abs_payload && abs_payload->names) {
+            CK_CHECK((abs_payload->names->flags & kSymlinkFlagRelative) == 0);
+            CK_CHECK(abs_payload->names->print == abs_target_u16);
+            CK_CHECK(abs_payload->names->substitute == u"\\??\\" + abs_target_u16 ||
+                     abs_payload->names->substitute == abs_target_u16);
+        }
+    }
+
+    const auto dir_basic = filesystem.inspect_basic(dir_link);
+    CK_CHECK(required(required(dir_basic).kind) == ObjectKind::SymbolicLink);
+    CK_CHECK(required(required(dir_basic).reparse_tag) == IO_REPARSE_TAG_SYMLINK);
+    const auto rejected = filesystem.open_directory(dir_link, DirectoryLinkPolicy::RejectFinalLink);
+    CK_CHECK(rejected.state() == ObservationState::Failed && !rejected.value());
+    CK_CHECK(rejected.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::FinalLinkRejected));
+    auto followed = filesystem.open_directory(dir_link, DirectoryLinkPolicy::FollowFinalLink);
+    CK_CHECK(followed.value() != nullptr);
+    if (followed.value()) {
+        const auto batch = (*followed.value())->read(16);
+        CK_CHECK(batch.state == DirectoryReadState::End && batch.names.size() == 1 &&
+                 batch.names[0] == *NativeName::from_windows(u"inside.txt"));
+    }
+    auto dir_opened = open_entry(filesystem, dir_link);
+    const auto dir_meta = dir_opened->read_link_metadata();
+    const auto* dir_payload = std::get_if<WindowsReparseData>(&required(dir_meta).payload);
+    CK_CHECK(dir_payload && dir_payload->kind == WindowsReparseKind::SymbolicLink && dir_payload->names.has_value());
+    if (dir_payload && dir_payload->names) {
+        CK_CHECK(dir_payload->names->substitute == u"target-dir" && dir_payload->names->print == u"target-dir");
+        CK_CHECK((dir_payload->names->flags & kSymlinkFlagRelative) != 0);
+    }
+    std::cout << "native-links: Windows symlink matrix qualified\n";
 }
 #endif
 

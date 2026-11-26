@@ -13,7 +13,7 @@ requires the `V:` development drive.
 The [implementation evidence](ck-files-progress.md) names the exact source
 revisions and the scope of each native and sanitizer run.
 
-Updated 2026-11-24.
+Updated 2026-11-25.
 Original baseline review:
 `81aaf009db23ca8558211722107bd2122351e565` (2026-10-23).
 
@@ -677,17 +677,22 @@ reported. All first-release features are present with no placeholder actions.
 - [ ] Execute the matrix below with actual feature-bearing fixtures and native
   independent inspection, not only mocked capability responses. Native ext4/XFS/Btrfs
   archive fixtures, APFS sparse/resource-fork/xattr/ACL source capture, Windows
-  ReFS/NTFS runtime tests, and Linux loopback FAT32 (`vfat`) probing are
-  recorded; real SMB/NFS shares, exFAT, and remaining cross-filesystem pairs
-  remain open.
+  ReFS and NTFS native feature suites (38/38 `test_files_*_native` passing on
+  both `V:` ReFS and an isolated NTFS VHDX covering ADS, ACLs/9-class security,
+  sparse & NTFS LZNT1 compression, hard links, symlinks/junctions/opaque GUID
+  reparse points, `FileCaseSensitiveInfo` case-sensitive directories, >260
+  extended DOS & loopback UNC paths, sharing violations, and Recycle Bin +
+  `action_native_scope`), and Linux loopback FAT32 (`vfat`) probing are
+  recorded; interactive-session EFS encryption, real SMB/NFS shares, exFAT, and
+  remaining cross-filesystem pairs remain open.
 - [~] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
   where supported, resource-lifetime tests, and deterministic cost budgets.
   Frontend `d69b033` expands deterministic fuzzing beyond the archive-journal
   baseline to settings, location/ExactNames parsing & completion, operation
   journals, native recovery evidence, archive recovery, and fail-closed overlap
   planning (`ck_vision_files_decoder_fuzz_tests`, 5 seeded suites / 8,500+
-  cases), qualified on macOS and Linux Release plus all four matching ASan/UBSan
-  and ThreadSanitizer cohorts. Windows fuzz/benchmark rerun and remaining
+  cases), qualified on macOS, Linux, and Windows x64 (`V:`) Release plus all
+  four matching macOS/Linux ASan/UBSan and ThreadSanitizer cohorts; remaining
   resource-lifetime fault tests stay open.
 - [~] Test very large directories and operation inventories (including at least
   100,000 entries), long names, low memory, index exhaustion, slow/disconnected
@@ -696,10 +701,11 @@ reported. All first-release features are present with no placeholder actions.
   Frontend `d69b033` adds `files_bench` (`files_benchmark_smoke --gate`),
   measuring 100,000-entry scan/sort/page-slice/steady-render/filter and
   1,000-journal overlap with explicit index-size (29.0 MiB / 128 MiB budget),
-  cell-budget (5600/5600, 0 idle bytes), and peak-RSS reporting across macOS
-  and Linux Release plus all four sanitizer cohorts; low-memory, disconnected
-  network mounts, full disks, and Windows `files_bench` measurement remain open.
-  See the [WP-07/WP-08 qualification record](ck-files-progress.md#2026-11-24--wp-07-100k-scale-benchmark-decoder-fuzzing-and-wp-08-packagingdocgen-qualification).
+  cell-budget (5600/5600, 0 idle bytes), and peak-RSS reporting across macOS,
+  Linux, and Windows x64 (`V:`, 154.6 MiB peak RSS) Release plus all four
+  macOS/Linux sanitizer cohorts; low-memory, disconnected network mounts, and
+  full-disk fault tests remain open.
+  See the [WP-07/WP-08 qualification record](ck-files-progress.md#2026-11-25--windows-x64-wp-07-benchmark-fuzzing-ntfsrefs-native-matrix-and-wp-08-zipconpty-packaging-qualification).
 - [ ] Test process crashes at every destructive transition; perform controlled
   VM/storage fault tests for any claimed power-loss guarantees.
 - [ ] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
@@ -717,14 +723,16 @@ access is a release blocker for that advertised capability, not a presumed pass.
 
 ### WP-08 — release and documentation
 
-- [~] Add all package/install/archive/terminal verification entries and verify
+- [x] Add all package/install/archive/terminal verification entries and verify
   `--help`, `--version`, launcher launch/return and installed executable paths.
-  `d69b033` passed `verify_ckvision_package`, `verify_ckvision_cutover` /
+  Passed `verify_ckvision_package`, `verify_ckvision_cutover` /
   `verify_ckvision_install`, `verify_ckvision_archive`, and
   `verify_ckvision_terminal` on macOS ARM64 (`.tar.gz` + Homebrew formula
-  `ruby -c`) and Linux ARM64 (`.tar.gz`, `.deb`, `.rpm`); Windows ZIP
-  packaging (`ck_windows_package_tools_contract`) awaits workstation online
-  availability.
+  `ruby -c`) and Linux ARM64 (`.tar.gz`, `.deb`, `.rpm`), and production
+  `BUILD_TESTING=OFF` Windows x64 `cpack -G ZIP` (`ck-utilities-0.2.0-windows-x64.zip`)
+  with unpacked `--version`/`--help` on all 10 tools and
+  `ck_windows_package_tools_contract` (`CKTOOLS_TEST_PACKAGE_IMAGE=1`) in real
+  ConPTY from a 283-char extended Unicode path.
 - [x] Document supported semantics and tested limits, loss dialogs, interrupted
   moves, Trash behavior, operational artifacts, and recovery procedures.
 - [~] Reconcile capability claims across WPs, user help and shipped actions.
@@ -738,10 +746,10 @@ access is a release blocker for that advertised capability, not a presumed pass.
 - [~] Run the full suite and fresh release rehearsal, Linux DEB/RPM/archive,
   macOS archive/Homebrew and Windows ZIP/ConPTY paths. Inspect the user-facing
   app in actual terminals on all OSes, including mouse and restricted-key paths.
-  Linux DEB/RPM/tar.gz and macOS tar.gz/Homebrew rehearsals passed on `d69b033`;
-  Windows ZIP rehearsal and interactive Windows desktop-window inspection for
-  the target user remain open (Session 1 belonged to another user and the
-  workstation later went offline).
+  Linux DEB/RPM/tar.gz, macOS tar.gz/Homebrew, and Windows x64 ZIP + unpacked
+  ConPTY rehearsals all passed; interactive Windows desktop-window inspection
+  for the target user (Session 1 currently belongs to another user) and final
+  post-B-01..B-05 full release rehearsal remain open.
 
 Acceptance: one release candidate with provenance, matrix, tests, build records,
 real-window observations and no undocumented preservation limits. Only then
