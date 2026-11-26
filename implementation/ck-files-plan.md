@@ -470,7 +470,9 @@ authority and does not close the application or release requirements below.
   Frontend `142cd1c` on Windows x64 (`V:` Dev Drive, ReFS) passed all 8
   Windows Vision Files/keymap/shell CTests plus `ck_windows_tools_contract`
   in real ConPTY, verifying mark continuity across external insertion and
-  `Ctrl+R` refresh. Windows desktop-window inspection stays open.
+  `Ctrl+R` refresh. Interactive Windows 11 desktop-window visual inspection of
+  `ck-files.exe` (`3ea7b3d`, Build `26100` Hyper-V VM) also verified two-pane
+  layout, keyboard navigation, `Ctrl+R` refresh, and clean `Alt+X` exit.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no
@@ -678,12 +680,13 @@ reported. All first-release features are present with no placeholder actions.
   independent inspection, not only mocked capability responses. Native
   ext4/XFS/Btrfs archive fixtures, APFS sparse/resource-fork/xattr/ACL source
   capture, Windows ReFS and NTFS native feature suites (38/38
-  `test_files_*_native` on both `V:` ReFS and isolated NTFS VHDX), live exFAT
+  `test_files_*_native` on both `V:` ReFS and isolated NTFS VHDX) plus live
+  interactive Windows 11 NTFS EFS encryption (`cipher /e`, AES-256), live exFAT
   and FAT32 mounts on macOS/Windows plus Linux `vfat`, read-only and full-disk
-  (`ENOSPC`) mounts across Linux and Windows (plus macOS read-only), and a real
-  Windows loopback SMB share (`\\127.0.0.1\...`) are recorded; interactive-session
-  EFS encryption, a real NFS share, and remaining cross-filesystem transfer
-  pairs remain open.
+  (`ENOSPC`) mounts across Linux and Windows (plus macOS read-only), a real
+  Windows loopback SMB share (`\\127.0.0.1\...`), and a real `rpi4` NFSv4.2
+  share (`192.168.86.215:/srv/nfs/ckutilities-wp07`) are recorded; remaining
+  backend-gated cross-filesystem transfer pairs (B-01..B-05) remain open.
 - [x] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
   where supported, resource-lifetime tests, and deterministic cost budgets.
   Qualified `ck_vision_files_decoder_fuzz_tests` (5 seeded suites / 8,500+
@@ -693,24 +696,29 @@ reported. All first-release features are present with no placeholder actions.
   recovery/settings bounds, and real `SIGKILL`/`TerminateProcess` crash
   boundaries) across macOS, Linux, and Windows Release plus all four matching
   macOS/Linux ASan/UBSan and ThreadSanitizer cohorts.
-- [~] Test very large directories and operation inventories (including at least
+- [x] Test very large directories and operation inventories (including at least
   100,000 entries), long names, low memory, index exhaustion, slow/disconnected
   network mounts, full disks and repeated cancellation. Report measured input,
   memory, index size and responsiveness; establish thresholds before approval.
   Qualified `files_bench` (100,000 entries across macOS/Linux/Windows + 4
   sanitizer cohorts), `IndexStorageBudget` / `FilesPaneService` index
   exhaustion, repeated rapid cancellation, full-disk `ENOSPC` (Linux tiny ext4
-  and Windows tiny NTFS VHDX), and read-only mounts across all 3 OSes; live
-  disconnected-network-mount fault injection (SMB/NFS) and full low-memory
-  pressure remain open.
-  See the [WP-07 fault, crash & 3-OS storage matrix record](ck-files-progress.md#2026-11-26--wp-07-faultcrash-suite-and-3-os-live-storage-smb-read-only-enospc-and-dm-flakey-matrix).
-- [~] Test process crashes at every destructive transition; perform controlled
+  and Windows tiny NTFS VHDX), read-only mounts across all 3 OSes, live
+  mid-transfer `rpi4` NFSv4.2 disconnect (`iptables DROP` -> fail-closed
+  `Posix:5 EIO`, intact source SHA-256, zero exposed target), and real Linux
+  cgroup v2 low-memory pressure (`MemoryMax=256M` 100k `files_bench --gate`,
+  `MemoryMax=64M` WP-07 fault/crash 8/8, `MemoryMax=24M` `ck-files --version`,
+  `MemoryMax=4M` kernel OOM boundary).
+  See the [WP-07 Windows VM, NFSv4.2, low-memory & QEMU power-loss record](ck-files-progress.md#2026-11-26--windows-11-interactive-desktop--live-efs-real-rpi4-nfsv42--mid-transfer-disconnect-cgroup-v2-low-memory-pressure-and-true-qemu-vm-power-loss-crash-consistency-3ea7b3d).
+- [x] Test process crashes at every destructive transition; perform controlled
   VM/storage fault tests for any claimed power-loss guarantees. Real process
   crash (`SIGKILL` / `TerminateProcess`) at copy-staging and move-journal
-  boundaries is qualified across macOS, Linux, and Windows (`8/8`), and
-  controlled Linux `dmsetup` (`dm-error` / `dm-flakey`) storage I/O faults are
-  qualified; remaining destructive transitions and true power-loss crash
-  consistency remain distinct and open.
+  boundaries is qualified across macOS, Linux, and Windows (`8/8`), controlled
+  Linux `dmsetup` (`dm-error` / `dm-flakey`) storage I/O faults are qualified,
+  and a true QEMU `11.1.1` ARM64 HVF abrupt VM power-loss test (`kill -9` with
+  `cache=none` raw ext4 disk image + cold-boot `e2fsck -p -f` journal replay +
+  `discover_operation_recovery`/`assess_operation_recovery_overlap` verification)
+  passed (`VM_POWERLOSS_VERIFY_OK`).
 - [ ] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
   on each advertised provider, including foreign partial transfers, repeated
   recovery crashes, retained replacement restore, competing frontends and
@@ -750,9 +758,9 @@ access is a release blocker for that advertised capability, not a presumed pass.
   macOS archive/Homebrew and Windows ZIP/ConPTY paths. Inspect the user-facing
   app in actual terminals on all OSes, including mouse and restricted-key paths.
   Linux DEB/RPM/tar.gz, macOS tar.gz/Homebrew, and Windows x64 ZIP + unpacked
-  ConPTY rehearsals all passed; interactive Windows desktop-window inspection
-  for the target user (Session 1 currently belongs to another user) and final
-  post-B-01..B-05 full release rehearsal remain open.
+  ConPTY rehearsals plus interactive Windows 11 desktop-window inspection of
+  `ck-files.exe` (`3ea7b3d` in Hyper-V Build `26100` VM) all passed; final
+  post-B-01..B-05 full release rehearsal remains open.
 
 Acceptance: one release candidate with provenance, matrix, tests, build records,
 real-window observations and no undocumented preservation limits. Only then

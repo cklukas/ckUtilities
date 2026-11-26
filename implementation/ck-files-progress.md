@@ -1,5 +1,53 @@
 # Files implementation evidence
 
+## 2026-11-26 — Windows 11 interactive desktop & live EFS, real `rpi4` NFSv4.2 & mid-transfer disconnect, cgroup v2 low-memory pressure, and true QEMU VM power-loss crash-consistency (`3ea7b3d`)
+
+### 1. Interactive Windows 11 desktop-window visual inspection of `ck-files.exe` and live EFS (`cipher /e`)
+
+Built a fresh MSVC `19.44.35228.0` x64 Release `ck-files.exe` (`3ea7b3d` + `ckVision 2.1.0` `3d018210` + `ck-core-fs-lib` `d51e5a0`, SHA-256 `70bc77880ddfc63df13978feae50f78c64339c820c441e97d0ef016f9712895d`, build elapsed `179.57 s`) on `workstation` (`V:\tmp\ckutil-win-vm-20261126`), copied it via Hyper-V `Copy-VMFile` into the interactive Windows 11 Enterprise Evaluation Build `26100` VM (`CWorks-WIN01-recovery-20261026`, user `CW-RECOVERY26\winprobe`, leaving host Session 1 untouched), and executed both live EFS encryption and interactive desktop-window inspection via `Msvm_Keyboard` + `GetVirtualSystemThumbnailImage`:
+- **Live NTFS EFS encryption (`cipher /e`)**: `cipher /e C:\Temp\ckfiles-vm\efs-test\secret.txt` succeeded with `CIPHER_E_RC=0`; `cipher /c` confirmed `E secret.txt` with `AES` 256-bit key (`Certificate thumbprint: B03A 083A BAEB AE62 CF4F 50B9 8A77 9190 45A6 CFAE`, decryptable by `CW-RECOVERY26\winprobe`), PowerShell confirmed `ATTRS=Archive, Encrypted ENCRYPTED=True`, and the interactive Windows EFS UI notification appeared.
+- **Visual desktop-window inspection of `ck-files.exe`**: Launched `ck-files.exe` (`ck-files 0.2.0 (ckVision 2.1.0)`) in a real Windows Terminal desktop window against two fixture panes (`C:\Temp\ckfiles-vm\fixture\left` and `right`). Visually inspected 4 captured desktop frames (`vm-shot1-efs.png`..`vm-shot4-ckfiles-exit.png`), verifying crisp double-line box borders, menu bar (`File Location Operations Marks View Help`), clock, `[Active] Left` / `[Other] Right` focus indicators, live keyboard navigation (`Down`, `Space`, `Ctrl+R` refresh), and clean `Alt+X` exit (`CKFILES_EXIT_RC=0`) restoring the terminal screen buffer.
+
+### 2. Real NFSv4.2 share (`rpi4`) & live mid-transfer network-mount disconnect
+
+Installed and activated `nfs-kernel-server` (`1:2.8.3-1`, `nfs-server.service` active) on `rpi4` (`192.168.86.215`, Debian arm64 `Linux 6.18.34`), exporting `/srv/nfs/ckutilities-wp07` (`rw,sync,no_subtree_check,insecure,all_squash,anonuid=1000,anongid=1000`), and mounted it via Linux kernel NFSv4.2 (`vers=4.2,proto=tcp,soft,timeo=15,retrans=2`) inside `ckdev` (`Linux 6.12.117`):
+- **Real NFSv4.2 capability & I/O**: `inspect_location()` observed `fs_type_code=0x6969` (`NFS_SUPER_MAGIC`), `read_only=false`, `name_max=255`, `file_size_bits=32`, `total_bytes=251283898368`, `avail_bytes=134827999232`; metadata inspection observed `xattr_state=0` (`Available`) and `acl_state=1` (`Unsupported`, `EOPNOTSUPP=95`); `create_staging_file` explicitly refused with `Posix:95 EOPNOTSUPP (staging.create_tmpfile)` without unsafe pathname fallback; `create_child_file` wrote and flushed 262,144 B with `identity_same=true` and independent `sha256sum` match (`d30eb241f95e7c37c033251a78eae1610ac9b02dc99625442158180d35818c1b`).
+- **Live mid-transfer network disconnect**: During a 32 MiB write to the live `rpi4` NFSv4.2 mount, severed TCP port 2049/12049 via `iptables -I OUTPUT/INPUT ... -j DROP` at offset 2 MiB (`IN_FLIGHT offset=2097152`). The transfer failed closed with `Posix:5 EIO (content.fsync, written_bytes=3145728)`, left source SHA-256 `3a26409bf32411924ce6475aa81377f176261548526e14f676b78e280feab45f` 100% intact (`INTACT=true`), and exposed zero final destination target after restoring the network link.
+
+### 3. Linux cgroup v2 low-memory pressure (`ckdev`)
+
+Executed real Linux cgroup v2 memory-capped runs (`systemd-run --user --scope -p MemorySwapMax=0`) against freshly built Release binaries (`3ea7b3d`):
+- `MemoryMax=256M`: `files_bench --gate` (100,000 entries) **PASSED** (`peak_rss_kib=189316`, `index_bytes=30400000/134217728`, `peak_backing_bytes=134400000`, `frame=5600/5600 cells`, `checksum 202343`).
+- `MemoryMax=64M`: `ck_vision_files_wp07_fault_and_crash_tests` **8/8 PASSED** (private `0700` scratch root).
+- `MemoryMax=24M`: `ck-files --version` **PASSED** (`ck-files 0.2.0 (ckVision 2.1.0)`).
+- `MemoryMax=4M`: extreme OOM boundary cleanly enforced by kernel cgroup OOM killer (`EXTREME_OOM_RC=137`).
+
+### 4. True QEMU ARM64 HVF VM power-loss crash-consistency test
+
+Booted a disposable QEMU `11.1.1` ARM64 HVF VM (`-machine virt -accel hvf -cpu host -m 512M`, Debian 13 `Linux 6.12.118+deb13-cloud-arm64`) attached to a 64 MiB raw ext4 disk image (`format=raw,if=virtio,cache=none,aio=threads`, bypassing host page cache):
+- **Boot 1 (`wp07mode=crash`)**: Mounted `/dev/vda` (`ext4`, `data=ordered`), seeded `src/payload.bin` (256 KiB, SHA-256 `a68e7049...`) and `dst/prior.bin` (64 KiB, SHA-256 `53ae5991...`), wrote staging bytes, durably flushed a `DestinationCommitted` move journal (`.ck-move-journal-vm-powerloss`), and signaled `VM_POWERCUT_READY`. The host harness immediately terminated QEMU with `kill -9` (abrupt VM power loss while handles were open).
+- **Boot 2 (`wp07mode=verify`)**: Cold-booted a fresh QEMU instance against the exact same raw ext4 disk image. `e2fsck -p -f /dev/vda` replayed the ext4 journal (`CKWP07PWR: recovering journal`, `VM_E2FSCK_RC=1`), mounted `/dev/vda`, and verified:
+  - `src/payload.bin` SHA-256 `a68e7049d81667b544d64703c75b579b8c02484c97dbc9564c294c6c8a10bd6d` (`match=true`),
+  - `dst/prior.bin` SHA-256 `53ae59916f4f24a9d01b1e28b79f7bd92b2819328bdc1e9114d0d6fc0c546b3e` (`match=true`),
+  - `VERIFY_FINAL_DST_EXISTS=false` (zero exposed partial destination),
+  - `discover_operation_recovery` found `journals=1`, `requires_reconciliation=true`,
+  - `assess_operation_recovery_overlap` blocked repeated submission (`has_conflict=true`, `conflicts=1`), exiting `VM_POWERLOSS_VERIFY_OK` (`rc=0`).
+
+### 5. Remaining open gates
+
+Only the backend architecture/ABI packages in `ck-core-fs-lib` remain open: B-01 (Darwin APFS same-UID held-FD strong publication remains formally No-Go per `ck-core-fs-lib/docs/darwin-protected-publication.md`), B-02 (retained replacement across restart), B-03 (qualified multi-item original-job resume / linked-retry & file-level checkpoints), B-04 (cross-volume source-retirement content+metadata stability proof), and B-05 (cross-process job coordination), together with the downstream R-01–12 matrix and post-B-01..B-05 release rehearsal.
+
+| Evidence (2026-11-26 Windows VM EFS/UI, NFSv4.2, low-memory, QEMU power-loss) | SHA-256 |
+| --- | --- |
+| Windows x64 `ck-files.exe` (`3ea7b3d`, MSVC `19.44.35228`, `V:`) | `70bc77880ddfc63df13978feae50f78c64339c820c441e97d0ef016f9712895d` |
+| Windows 11 VM live EFS `cipher /e` + `cipher /c` screenshot (`vm-shot1-efs.png`) | `dc7c6a9aeb9956e02e42e737eedb41ef582e902b9f36d0139c89998f249932d1` |
+| Windows 11 VM `ck-files.exe` initial desktop window (`vm-shot2-ckfiles-initial.png`) | `5d092b552e007316292b49778488235050065c1d54e19a01ea9b38a796a4d2af` |
+| Windows 11 VM `ck-files.exe` post-navigation/refresh (`vm-shot3-ckfiles-marked.png`) | `6cef887a9d813f700a06b83eedf9bf52f8021dd93ca7c722b247543b26edf371` |
+| Windows 11 VM `ck-files.exe` clean `Alt+X` exit (`vm-shot4-ckfiles-exit.png`) | `88ec49b9c207cdb7248b943b2108e65a331eec27c377f9fa7be3bda533cdcf96` |
+| Linux `ckdev` → `rpi4` NFSv4.2 & live `iptables` disconnect log | `0b49aee4ae3cd3c9ed4a638a969a098d306ece087e0341f7e23dfb778d4f40fe` |
+| Linux `ckdev` cgroup v2 `MemoryMax` low-memory pressure log | `30d5d6dfcd513b88b5d71517cb24141823dceeb694d2e3264ded74d28a9919d6` |
+| Mac QEMU 11.1.1 ARM64 HVF abrupt power-loss crash-consistency log | `7ce2007f404039276a0cdfb986b07e70954502693947928c87716b4a906571ad` |
+
 ## 2026-11-26 — WP-07 fault/crash suite and 3-OS live storage, SMB, read-only, ENOSPC, and dm-flakey matrix
 
 ### 1. Cross-platform WP-07 reliability, fault-injection, and real process-crash suite
