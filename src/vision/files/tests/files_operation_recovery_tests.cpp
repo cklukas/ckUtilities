@@ -901,3 +901,133 @@ CK_TEST(files_operation_recovery_reconciliation_r02_r03_r04_catalog_and_request_
             found_corrupt_catalog_entry = true;
     CK_CHECK(found_corrupt_catalog_entry);
 }
+
+CK_TEST(files_operation_recovery_reconciliation_edge_cases_fail_closed_multi_item_and_copy_retry) {
+    const ck::testing::ScratchDirectory scratch("files-recovery-reconciliation-edges",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto src_dir = scratch.path() / "src";
+    const auto nested_dir = src_dir / "subdir";
+    const auto dst_dir = scratch.path() / "dst";
+    const auto journals = scratch.path() / "journals";
+    CK_CHECK(ck::io::create_directories(nested_dir));
+    CK_CHECK(ck::io::create_directories(dst_dir));
+    CK_CHECK(ck::io::create_directories(journals));
+    CK_CHECK(ck::io::write_file(src_dir / "A.jpg", "top-A-bytes"));
+    CK_CHECK(ck::io::write_file(src_dir / "B.jpg", "top-B-bytes"));
+    CK_CHECK(ck::io::write_file(nested_dir / "A.jpg", "nested-A-bytes"));
+
+    const auto root = address(journals);
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+
+    const auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+
+    NativeFileSystem fs;
+    auto dir_src = fs.open_native_directory(address(src_dir)).take_value();
+    auto dir_nested = fs.open_native_directory(address(nested_dir)).take_value();
+    auto dir_dst = fs.open_native_directory(address(dst_dir)).take_value();
+    const auto id_src = *dir_src->identity().value();
+    const auto id_dst = *dir_dst->identity().value();
+    const auto dur_src = *NativeDurableIdentity::from_live(id_src);
+    const auto dur_dst = *NativeDurableIdentity::from_live(id_dst);
+
+    auto open_id = [&](DirectoryCursor &dir, const NativeName &name) {
+        auto h = dir.open_child(name, EntryAccess::MetadataOnly);
+        CK_CHECK(h.value());
+        return *(*h.value())->inspect_basic().value()->identity.value();
+    };
+    const auto id_a = open_id(*dir_src, leaf("A.jpg", u"A.jpg"));
+    const auto id_b = open_id(*dir_src, leaf("B.jpg", u"B.jpg"));
+    const auto id_nested_a = open_id(*dir_nested, leaf("A.jpg", u"A.jpg"));
+
+    OperationJournalId jid = journal_id();
+    jid.bytes[2] = std::byte{0x77};
+    auto created = OperationJournal::create(FileOperation::Copy, jid, {8, 64, 16 * 1024});
+    CK_CHECK(created.value());
+    auto journal = std::move(created).take_value();
+    auto jfile = open_native_operation_journal_file(
+        root, leaf(".ck-copy-journal-edge", u".ck-copy-journal-edge"), true).take_value();
+
+    auto make_ev = [&](const char *sp, const char16_t *sw, const char *np, const char16_t *nw,
+                       const ObjectIdentity &obj) {
+        NativeOperationRecoveryEvidence ev{
+            leaf(sp, sw), leaf(np, nw), dur_src, *NativeDurableIdentity::from_live(obj), dur_dst,
+            std::nullopt, address(dst_dir), std::nullopt, std::nullopt, StagingNamespace::Named, leaf(np, nw)};
+        return *encode_native_operation_recovery_evidence(ev).value();
+    };
+    const auto ev_a = make_ev(".ck-stg-a", u".ck-stg-a", "A.jpg", u"A.jpg", id_a);
+    const auto ev_b = make_ev(".ck-stg-b", u".ck-stg-b", "B.jpg", u"B.jpg", id_b);
+
+    std::uint64_t seq = 1;
+    // Item 0 (A): Prepared (unfinished copy -> eligible for Copy RetryUnresolved -> ReviewNewLinkedAttempt)
+    CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 0, OperationJournalState::Planned, ev_a}).value());
+    CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 0, OperationJournalState::Prepared, ev_a}).value());
+    // Item 1 (B): Prepared (unfinished copy in same journal)
+    CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 1, OperationJournalState::Planned, ev_b}).value());
+    CK_CHECK(append_operation_journal_file(*jfile, *journal, {seq++, 1, OperationJournalState::Prepared, ev_b}).value());
+    CK_CHECK(jfile->finish_io().value());
+
+    const auto scan_obs = discover_operation_recovery(root);
+    CK_CHECK(scan_obs.value() && scan_obs.value()->reconciliation_catalog.has_value());
+    CK_CHECK(!scan_obs.value()->reconciliation_error.has_value());
+    const auto &scan = *scan_obs.value();
+
+    // 1) Copy journal RetryUnresolved -> ReviewNewLinkedAttempt (distinct from Move ReviewBlockedRetry).
+    TransferRequestReviewInput retry_copy;
+    retry_copy.kind = TransferRequestKind::RetryUnresolved;
+    retry_copy.recorded_journal = jid;
+    retry_copy.recorded_item = 0;
+    const auto retry_copy_res = review_operation_transfer_request(scan, retry_copy);
+    CK_CHECK(retry_copy_res.value() &&
+             retry_copy_res.value()->disposition == TransferRequestDisposition::ReviewNewLinkedAttempt);
+
+    // 2) Multi-item journal: inventory contains only A.jpg (targeting a disjoint destination),
+    //    so only Item 0 overlaps and receives disposition; if both items overlap via dst_dir,
+    //    Item 0 gets A's match while Item 1 is matched by its own (journal_index, item) pair.
+    FrozenInventoryBuilder inv_only_a(InventoryMountPolicy::DirectObjects, InventoryLinkPolicy::PreserveLinks);
+    CK_CHECK(inv_only_a.add({address(src_dir / "A.jpg"), id_a, ObjectKind::RegularFile, {}, 11U,
+                             LinkTraversalEvidence::NotLink, std::nullopt, {leaf("A.jpg", u"A.jpg")}}));
+    CK_CHECK(inv_only_a.seal());
+    const auto overlap_a = assess_operation_recovery_overlap(scan, **inv_only_a.completed().value(), id_dst, id_src);
+    CK_CHECK(overlap_a.conflicts.size() == 2U);
+    if (overlap_a.conflicts.size() == 2U) {
+        // Item 0 (A.jpg) matched directly; Item 1 (B.jpg) only shares parent directory, not A's item index.
+        CK_CHECK(overlap_a.conflicts[0].source_name == std::optional<std::string>{"A.jpg"});
+        CK_CHECK(overlap_a.conflicts[0].disposition == TransferRequestDisposition::ReviewOverlappingAttempts);
+        CK_CHECK(overlap_a.conflicts[0].row_review == TransferRowReview::PreserveUnpublishedStaging);
+        CK_CHECK(overlap_a.conflicts[1].source_name == std::optional<std::string>{"B.jpg"});
+        CK_CHECK(overlap_a.conflicts[1].row_review == TransferRowReview::PreserveUnpublishedStaging);
+    }
+
+    // 3) Nested tree entry subdir/A.jpg (relative_components.size() == 2) must NOT fabricate
+    //    top-level src_dir/A.jpg or dst_dir/A.jpg addresses when assessed against an unrelated destination.
+    FrozenInventoryBuilder inv_nested(InventoryMountPolicy::DirectObjects, InventoryLinkPolicy::PreserveLinks);
+    CK_CHECK(inv_nested.add({address(nested_dir / "A.jpg"), id_nested_a, ObjectKind::RegularFile, {}, 14U,
+                             LinkTraversalEvidence::NotLink, std::nullopt,
+                             {leaf("subdir", u"subdir"), leaf("A.jpg", u"A.jpg")}}));
+    CK_CHECK(inv_nested.seal());
+    const auto overlap_nested = assess_operation_recovery_overlap(scan, **inv_nested.completed().value(),
+                                                                  std::nullopt, id_src);
+    CK_CHECK(!overlap_nested.has_conflict());
+
+    // 4) Fail-closed when reconciliation_catalog is absent / reconciliation_error is present.
+    FilesOperationRecoveryScan degraded = scan;
+    degraded.reconciliation_catalog.reset();
+    degraded.reconciliation_error = UnavailableObservation{
+        ObservationState::Unknown,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit),
+         "transfer_reconciliation.bytes"}};
+    const auto fail_closed_overlap =
+        assess_operation_recovery_overlap(degraded, **inv_nested.completed().value(), std::nullopt, std::nullopt);
+    CK_CHECK(fail_closed_overlap.has_conflict() && fail_closed_overlap.has_untrusted_journal());
+    const auto fail_closed_review = review_operation_transfer_request(degraded, retry_copy);
+    CK_CHECK(!fail_closed_review.value() && fail_closed_review.unavailable_detail() &&
+             fail_closed_review.unavailable_detail()->error.operation == "transfer_reconciliation.bytes");
+}

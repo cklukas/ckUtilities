@@ -49,6 +49,7 @@ struct FilesOperationRecoveryScan final {
     std::vector<FilesOperationRecoveryItem> journals;
     bool requires_reconciliation = false;
     std::optional<ck::files::TransferJournalCatalog> reconciliation_catalog;
+    std::optional<ck::files::UnavailableObservation> reconciliation_error;
 };
 
 enum class FilesOperationRecoveryOverlapKind {

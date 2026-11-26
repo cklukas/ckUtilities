@@ -111,7 +111,9 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
             std::vector<std::vector<std::byte>> transfer_snapshots;
             std::vector<std::size_t> transfer_indices;
             std::size_t total_snapshot_bytes = 0;
-            constexpr std::size_t kMaxReconciliationTotalBytes = 64U * 1024U * 1024U;
+            std::optional<ck::files::UnavailableObservation> snapshot_failure;
+            constexpr std::size_t kMaxReconciliationTotalBytes =
+                std::min<std::size_t>(64U * 1024U * 1024U, ck::files::OperationJournalCodecLimits::hard_max_bytes);
             auto remaining_batches = limits.max_scan_batches;
             for (;;) {
                 if (!remaining_batches)
@@ -137,6 +139,7 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
                     item.display_name = name.display_name();
                     item.kind = *kind;
                     std::optional<std::vector<std::byte>> snapshot_bytes;
+                    bool snapshot_budget_exceeded = false;
                     auto file = ck::files::open_held_operation_journal_file(*cursor, name);
                     if (!file.value()) {
                         item.error = *file.unavailable_detail();
@@ -149,10 +152,14 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
                                         **file.value(), limits.journal, limits.codec, limits.evidence);
                                 auto inspected = ck::files::inspect_native_operation_recovery_evidence(
                                     **file.value(), limits.journal, limits.codec, limits.evidence);
-                                if (total_snapshot_bytes < kMaxReconciliationTotalBytes) {
-                                    const std::size_t budget = std::min(
-                                        limits.codec.max_bytes, kMaxReconciliationTotalBytes - total_snapshot_bytes);
-                                    snapshot_bytes = read_bounded_journal_snapshot(**file.value(), budget);
+                                if (!snapshot_failure) {
+                                    if (total_snapshot_bytes < kMaxReconciliationTotalBytes) {
+                                        const std::size_t budget = std::min(
+                                            limits.codec.max_bytes, kMaxReconciliationTotalBytes - total_snapshot_bytes);
+                                        snapshot_bytes = read_bounded_journal_snapshot(**file.value(), budget);
+                                    } else {
+                                        snapshot_budget_exceeded = true;
+                                    }
                                 }
                                 return inspected;
                             },
@@ -166,6 +173,19 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
                             item.report = FilesOperationRecoveryReport{
                                 inspection.value()->journal_id, std::move(inspection).take_value()};
                         }
+                    }
+                    const bool valid_transfer_without_snapshot =
+                        *kind == FilesOperationJournalKind::Transfer && item.report && !snapshot_bytes;
+                    if (valid_transfer_without_snapshot && !snapshot_failure) {
+                        snapshot_failure = ck::files::UnavailableObservation{
+                            ck::files::ObservationState::Unknown,
+                            {ck::files::ErrorDomain::Adapter,
+                             static_cast<std::int64_t>(snapshot_budget_exceeded
+                                 ? ck::files::AdapterError::InventoryLimit
+                                 : ck::files::AdapterError::InterruptedRead),
+                             snapshot_budget_exceeded
+                                 ? "operation_recovery.reconciliation_snapshot_budget"
+                                 : "operation_recovery.reconciliation_snapshot_read"}};
                     }
                     const std::size_t item_idx = result.journals.size();
                     result.journals.push_back(std::move(item));
@@ -185,23 +205,37 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
                     return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InterruptedRead,
                         "operation_recovery.enumerate", ck::files::ObservationState::Unknown);
             }
-            ck::files::TransferReconciliationLimits reconciliation_limits;
-            reconciliation_limits.max_journals = std::min<std::size_t>(std::max<std::size_t>(limits.max_journals, 1), 16'384U);
-            reconciliation_limits.max_total_bytes =
-                std::min<std::size_t>(kMaxReconciliationTotalBytes, ck::files::OperationJournalCodecLimits::hard_max_bytes);
-            reconciliation_limits.max_records_per_journal =
-                std::min<std::size_t>(std::max<std::size_t>(limits.journal.max_records, 1), 4096U);
-            std::vector<std::span<const std::byte>> views;
-            views.reserve(transfer_snapshots.size());
-            for (const auto &buf : transfer_snapshots)
-                views.emplace_back(buf.data(), buf.size());
-            auto catalog = ck::files::inspect_transfer_journals(views, reconciliation_limits);
-            if (catalog.value()) {
-                if (catalog.value()->journals.size() == transfer_indices.size()) {
-                    for (std::size_t k = 0; k < transfer_indices.size(); ++k)
-                        result.journals[transfer_indices[k]].reconciliation = catalog.value()->journals[k];
+            if (snapshot_failure) {
+                result.reconciliation_error = std::move(snapshot_failure);
+                result.requires_reconciliation = true;
+            } else {
+                ck::files::TransferReconciliationLimits reconciliation_limits;
+                reconciliation_limits.max_journals =
+                    std::min<std::size_t>(std::max<std::size_t>(limits.max_journals, 1), 16'384U);
+                reconciliation_limits.max_total_bytes = kMaxReconciliationTotalBytes;
+                reconciliation_limits.max_records_per_journal =
+                    std::min<std::size_t>(std::max<std::size_t>(limits.journal.max_records, 1), 4096U);
+                std::vector<std::span<const std::byte>> views;
+                views.reserve(transfer_snapshots.size());
+                for (const auto &buf : transfer_snapshots)
+                    views.emplace_back(buf.data(), buf.size());
+                auto catalog = ck::files::inspect_transfer_journals(views, reconciliation_limits);
+                if (catalog.value()) {
+                    if (catalog.value()->journals.size() == transfer_indices.size()) {
+                        for (std::size_t k = 0; k < transfer_indices.size(); ++k)
+                            result.journals[transfer_indices[k]].reconciliation = catalog.value()->journals[k];
+                    }
+                    result.reconciliation_catalog = std::move(catalog).take_value();
+                } else {
+                    result.reconciliation_error = catalog.unavailable_detail()
+                        ? *catalog.unavailable_detail()
+                        : ck::files::UnavailableObservation{
+                              ck::files::ObservationState::Unknown,
+                              {ck::files::ErrorDomain::Adapter,
+                               static_cast<std::int64_t>(ck::files::AdapterError::ProviderReviewRequired),
+                               "operation_recovery.reconciliation_catalog_failed"}};
+                    result.requires_reconciliation = true;
                 }
-                result.reconciliation_catalog = std::move(catalog).take_value();
             }
             return ck::files::Observation<FilesOperationRecoveryScan>::available(std::move(result));
         }, [&] { return ck::files::finish_operation_journal_directory(*cursor); },
@@ -228,6 +262,11 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
     using namespace ck::files;
     constexpr std::size_t max_reported_conflicts = 256;
     FilesOperationRecoveryOverlapReport report;
+    struct ConflictOrigin {
+        std::optional<std::size_t> catalog_index;
+        std::optional<std::size_t> item_index;
+    };
+    std::vector<ConflictOrigin> origins;
     const auto matches_any_entry = [&](const NativeDurableIdentity &id) noexcept {
         return std::any_of(inventory.entries().begin(), inventory.entries().end(), [&](const auto &entry) noexcept {
             return id.matches_live(entry.identity);
@@ -237,12 +276,19 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
                                 const std::optional<ObjectIdentity> &live) noexcept {
         return live.has_value() && id.matches_live(*live);
     };
-    const auto add_conflict = [&](FilesOperationRecoveryOverlap conflict) {
-        if (report.conflicts.size() < max_reported_conflicts)
+    const auto add_conflict = [&](FilesOperationRecoveryOverlap conflict, ConflictOrigin origin = {}) {
+        if (report.conflicts.size() < max_reported_conflicts) {
             report.conflicts.push_back(std::move(conflict));
+            origins.push_back(origin);
+        }
     };
 
+    std::size_t transfer_catalog_index = 0;
     for (const auto &item : scan.journals) {
+        std::optional<std::size_t> current_catalog_index;
+        if (item.kind == FilesOperationJournalKind::Transfer) {
+            current_catalog_index = transfer_catalog_index++;
+        }
         if (report.conflicts.size() >= max_reported_conflicts)
             break;
         if (item.error || !item.report) {
@@ -252,7 +298,7 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
             conflict.reason = item.error
                 ? "unreadable or malformed journal (" + item.error->error.operation + ") cannot be excluded"
                 : "operation journal report is missing and cannot be excluded";
-            add_conflict(std::move(conflict));
+            add_conflict(std::move(conflict), {current_catalog_index, std::nullopt});
             continue;
         }
         const auto &inspection = item.report->inspection;
@@ -264,7 +310,7 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
             conflict.reason = inspection.report.has_untrusted_tail
                 ? "journal has an untrusted tail and requires reconciliation"
                 : "journal has untrusted native evidence and requires reconciliation";
-            add_conflict(std::move(conflict));
+            add_conflict(std::move(conflict), {current_catalog_index, std::nullopt});
             continue;
         }
         auto artifact = inspection.artifacts.begin();
@@ -285,7 +331,7 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
                     conflict.state = recovery.state;
                     conflict.action = recovery.action;
                     conflict.reason = "unfinished journal lacks decoded native identities and cannot be excluded";
-                    add_conflict(std::move(conflict));
+                    add_conflict(std::move(conflict), {current_catalog_index, recovery.item});
                     continue;
                 }
                 if (matched_artifact->deletion_evidence) {
@@ -304,7 +350,7 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
                         conflict.action = recovery.action;
                         conflict.source_name = del.source_name.display_name();
                         conflict.reason = "unfinished deletion overlaps source or destination identity";
-                        add_conflict(std::move(conflict));
+                        add_conflict(std::move(conflict), {current_catalog_index, recovery.item});
                     }
                     continue;
                 }
@@ -353,7 +399,7 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
                         conflict.reason = "selected source overlaps a previous transfer destination";
                     else
                         conflict.reason = "destination overlaps a previous transfer source";
-                    add_conflict(std::move(conflict));
+                    add_conflict(std::move(conflict), {current_catalog_index, recovery.item});
                 }
                 continue;
             }
@@ -385,10 +431,17 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
                     conflict.reason = reverse_published
                         ? "previous move already committed this object from the destination folder and retained its source"
                         : "previous move already committed the destination and retained the source; repeat requires reconciliation";
-                    add_conflict(std::move(conflict));
+                    add_conflict(std::move(conflict), {current_catalog_index, recovery.item});
                 }
             }
         }
+    }
+    if (scan.reconciliation_error) {
+        FilesOperationRecoveryOverlap conflict;
+        conflict.kind = FilesOperationRecoveryOverlapKind::UntrustedJournal;
+        conflict.reason = "transfer reconciliation catalog failed (" + scan.reconciliation_error->error.operation +
+            ") and cannot exclude overlapping journals";
+        add_conflict(std::move(conflict));
     }
     if (scan.reconciliation_catalog && !scan.reconciliation_catalog->journals.empty()) {
         const auto durable_src_parent = source_parent ? NativeDurableIdentity::from_live(*source_parent) : std::nullopt;
@@ -397,11 +450,15 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
             TransferRequestReviewInput input;
             input.kind = TransferRequestKind::SubmitAgain;
             input.source_object = NativeDurableIdentity::from_live(entry.identity);
-            const auto leaf = leaf_name_of(entry);
-            if (durable_src_parent && leaf && leaf->is_valid())
-                input.source = TransferEntryAddress{*durable_src_parent, *leaf};
-            if (durable_dst_parent && leaf && leaf->is_valid())
-                input.destination = TransferEntryAddress{*durable_dst_parent, *leaf};
+            // source_parent and destination are only direct parents for top-level
+            // entries; nested tree entries must not fabricate top-level addresses.
+            if (entry.relative_components.size() <= 1) {
+                const auto leaf = leaf_name_of(entry);
+                if (durable_src_parent && leaf && leaf->is_valid())
+                    input.source = TransferEntryAddress{*durable_src_parent, *leaf};
+                if (durable_dst_parent && leaf && leaf->is_valid())
+                    input.destination = TransferEntryAddress{*durable_dst_parent, *leaf};
+            }
             if (!input.source_object && !input.source && !input.destination)
                 continue;
             const auto reviewed = ck::files::review_transfer_request(*scan.reconciliation_catalog, input);
@@ -410,12 +467,14 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
             for (const auto &match : reviewed.value()->matches) {
                 if (match.journal_index >= scan.reconciliation_catalog->journals.size())
                     continue;
-                const auto &j = scan.reconciliation_catalog->journals[match.journal_index];
-                if (!j.id)
-                    continue;
-                for (auto &conflict : report.conflicts) {
-                    if (conflict.journal_id && *conflict.journal_id == *j.id && !conflict.disposition)
-                        conflict.disposition = reviewed.value()->disposition;
+                for (std::size_t idx = 0; idx < report.conflicts.size(); ++idx) {
+                    if (report.conflicts[idx].disposition)
+                        continue;
+                    if (origins[idx].catalog_index != match.journal_index)
+                        continue;
+                    if (origins[idx].item_index && *origins[idx].item_index != match.item)
+                        continue;
+                    report.conflicts[idx].disposition = reviewed.value()->disposition;
                 }
             }
         }
@@ -426,11 +485,15 @@ FilesOperationRecoveryOverlapReport assess_operation_recovery_overlap(
 ck::files::Observation<ck::files::TransferRequestReview> review_operation_transfer_request(
     const FilesOperationRecoveryScan &scan, const ck::files::TransferRequestReviewInput &input,
     std::stop_token stop) {
-    if (!scan.reconciliation_catalog)
+    if (!scan.reconciliation_catalog) {
+        if (scan.reconciliation_error)
+            return ck::files::Observation<ck::files::TransferRequestReview>::unavailable(
+                scan.reconciliation_error->state, scan.reconciliation_error->error);
         return error<ck::files::TransferRequestReview>(
             ck::files::AdapterError::ProviderReviewRequired,
             "operation_recovery.reconciliation_catalog_missing",
             ck::files::ObservationState::Unknown);
+    }
     return ck::files::review_transfer_request(*scan.reconciliation_catalog, input, stop);
 }
 

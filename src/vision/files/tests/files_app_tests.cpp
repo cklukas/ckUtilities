@@ -1479,7 +1479,9 @@ CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes
     f.until([&] {
         const auto text = f.painted();
         return text.find("Operation recovery review") != std::string::npos &&
-               text.find(".ck-move-journal-") != std::string::npos && text.find("State: complete") != std::string::npos;
+               text.find(".ck-move-journal-") != std::string::npos &&
+               text.find("State: complete") != std::string::npos &&
+               text.find("Review:") != std::string::npos;
     });
 }
 CK_TEST(files_app_keep_existing_moves_only_the_nonconflicting_marked_file) {
@@ -3971,6 +3973,8 @@ CK_TEST(files_app_repeat_transfer_blocks_overlapping_unfinished_journal_and_allo
     CK_CHECK(modal.find("Original-job resume and linked retry") != std::string::npos);
     CK_CHECK(modal.find(".ck-move-journal-live-overlap") != std::string::npos);
     CK_CHECK(modal.find("destination committed") != std::string::npos);
+    CK_CHECK(modal.find("Disposition: overlapping transfer attempts") != std::string::npos);
+    CK_CHECK(modal.find("Review: verify and protect committed destination") != std::string::npos);
     CK_CHECK(!f.app->operation_review_pending());
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
     CK_CHECK(f.key(ckv::Key::Escape));

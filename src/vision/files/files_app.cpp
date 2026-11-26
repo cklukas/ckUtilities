@@ -1952,6 +1952,10 @@ struct FilesApp::State {
             return;
         std::ostringstream summary;
         summary << "Read-only inspection\n\n";
+        if (operation_recovery_scan->reconciliation_error) {
+            summary << "Reconciliation catalog: review required ("
+                    << operation_recovery_scan->reconciliation_error->error.operation << ")\n\n";
+        }
         constexpr std::size_t max_items = 64;
         const auto &journals = operation_recovery_scan->journals;
         const auto count = std::min(max_items, journals.size());
@@ -1962,6 +1966,10 @@ struct FilesApp::State {
             const bool retention = item.kind == FilesOperationJournalKind::RetainedTarget;
             if (retention)
                 summary << "Previous target version\n";
+            if (item.reconciliation &&
+                item.reconciliation->lineage != ck::files::TransferLineageStatus::Unrecorded) {
+                summary << "Lineage: " << transfer_lineage_label(item.reconciliation->lineage) << '\n';
+            }
             if (item.report) {
                 const auto &inspection = item.report->inspection;
                 summary << "Items: " << inspection.report.items.size() << '\n';
