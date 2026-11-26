@@ -674,40 +674,43 @@ reported. All first-release features are present with no placeholder actions.
 
 ### WP-07 — qualification matrix and reliability
 
-- [ ] Execute the matrix below with actual feature-bearing fixtures and native
-  independent inspection, not only mocked capability responses. Native ext4/XFS/Btrfs
-  archive fixtures, APFS sparse/resource-fork/xattr/ACL source capture, Windows
-  ReFS and NTFS native feature suites (38/38 `test_files_*_native` passing on
-  both `V:` ReFS and an isolated NTFS VHDX covering ADS, ACLs/9-class security,
-  sparse & NTFS LZNT1 compression, hard links, symlinks/junctions/opaque GUID
-  reparse points, `FileCaseSensitiveInfo` case-sensitive directories, >260
-  extended DOS & loopback UNC paths, sharing violations, and Recycle Bin +
-  `action_native_scope`), and Linux loopback FAT32 (`vfat`) probing are
-  recorded; interactive-session EFS encryption, real SMB/NFS shares, exFAT, and
-  remaining cross-filesystem pairs remain open.
-- [~] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
+- [~] Execute the matrix below with actual feature-bearing fixtures and native
+  independent inspection, not only mocked capability responses. Native
+  ext4/XFS/Btrfs archive fixtures, APFS sparse/resource-fork/xattr/ACL source
+  capture, Windows ReFS and NTFS native feature suites (38/38
+  `test_files_*_native` on both `V:` ReFS and isolated NTFS VHDX), live exFAT
+  and FAT32 mounts on macOS/Windows plus Linux `vfat`, read-only and full-disk
+  (`ENOSPC`) mounts across Linux and Windows (plus macOS read-only), and a real
+  Windows loopback SMB share (`\\127.0.0.1\...`) are recorded; interactive-session
+  EFS encryption, a real NFS share, and remaining cross-filesystem transfer
+  pairs remain open.
+- [x] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
   where supported, resource-lifetime tests, and deterministic cost budgets.
-  Frontend `d69b033` expands deterministic fuzzing beyond the archive-journal
-  baseline to settings, location/ExactNames parsing & completion, operation
-  journals, native recovery evidence, archive recovery, and fail-closed overlap
-  planning (`ck_vision_files_decoder_fuzz_tests`, 5 seeded suites / 8,500+
-  cases), qualified on macOS, Linux, and Windows x64 (`V:`) Release plus all
-  four matching macOS/Linux ASan/UBSan and ThreadSanitizer cohorts; remaining
-  resource-lifetime fault tests stay open.
+  Qualified `ck_vision_files_decoder_fuzz_tests` (5 seeded suites / 8,500+
+  cases), `files_benchmark_smoke --gate`, and
+  `ck_vision_files_wp07_fault_and_crash_tests` (index-budget exhaustion,
+  repeated rapid cancel & in-flight controller/service destruction, oversized
+  recovery/settings bounds, and real `SIGKILL`/`TerminateProcess` crash
+  boundaries) across macOS, Linux, and Windows Release plus all four matching
+  macOS/Linux ASan/UBSan and ThreadSanitizer cohorts.
 - [~] Test very large directories and operation inventories (including at least
   100,000 entries), long names, low memory, index exhaustion, slow/disconnected
   network mounts, full disks and repeated cancellation. Report measured input,
   memory, index size and responsiveness; establish thresholds before approval.
-  Frontend `d69b033` adds `files_bench` (`files_benchmark_smoke --gate`),
-  measuring 100,000-entry scan/sort/page-slice/steady-render/filter and
-  1,000-journal overlap with explicit index-size (29.0 MiB / 128 MiB budget),
-  cell-budget (5600/5600, 0 idle bytes), and peak-RSS reporting across macOS,
-  Linux, and Windows x64 (`V:`, 154.6 MiB peak RSS) Release plus all four
-  macOS/Linux sanitizer cohorts; low-memory, disconnected network mounts, and
-  full-disk fault tests remain open.
-  See the [WP-07/WP-08 qualification record](ck-files-progress.md#2026-11-25--windows-x64-wp-07-benchmark-fuzzing-ntfsrefs-native-matrix-and-wp-08-zipconpty-packaging-qualification).
-- [ ] Test process crashes at every destructive transition; perform controlled
-  VM/storage fault tests for any claimed power-loss guarantees.
+  Qualified `files_bench` (100,000 entries across macOS/Linux/Windows + 4
+  sanitizer cohorts), `IndexStorageBudget` / `FilesPaneService` index
+  exhaustion, repeated rapid cancellation, full-disk `ENOSPC` (Linux tiny ext4
+  and Windows tiny NTFS VHDX), and read-only mounts across all 3 OSes; live
+  disconnected-network-mount fault injection (SMB/NFS) and full low-memory
+  pressure remain open.
+  See the [WP-07 fault, crash & 3-OS storage matrix record](ck-files-progress.md#2026-11-26--wp-07-faultcrash-suite-and-3-os-live-storage-smb-read-only-enospc-and-dm-flakey-matrix).
+- [~] Test process crashes at every destructive transition; perform controlled
+  VM/storage fault tests for any claimed power-loss guarantees. Real process
+  crash (`SIGKILL` / `TerminateProcess`) at copy-staging and move-journal
+  boundaries is qualified across macOS, Linux, and Windows (`8/8`), and
+  controlled Linux `dmsetup` (`dm-error` / `dm-flakey`) storage I/O faults are
+  qualified; remaining destructive transitions and true power-loss crash
+  consistency remain distinct and open.
 - [ ] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
   on each advertised provider, including foreign partial transfers, repeated
   recovery crashes, retained replacement restore, competing frontends and

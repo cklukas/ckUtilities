@@ -293,9 +293,13 @@ filesystem and desktop acceptance checks are still in qualification.
 
 The operation plan is not a global transaction and does not promise rollback
 after a partial failure. Cancellation stops new work at a safe boundary and
-reports completed effects. Recovery verifies identities and journals before
-offering inspect, cleanup, or revalidated retry; it never automatically
-deletes an artifact or source by pathname.
+reports completed effects. Process-crash recovery (`SIGKILL` / `TerminateProcess`
+at copy-staging and move-journal boundaries) and kernel I/O fault handling
+(`ENOSPC`, read-only mounts, and Linux `dm-error`/`dm-flakey` tests) are
+qualified separately from host power-loss guarantees; universal losslessness is
+never claimed. Recovery verifies identities and journals before offering
+inspect, cleanup, or revalidated retry; it never automatically deletes an
+artifact or source by pathname.
 
 See the [Files implementation plan](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-plan.md),
 [contracts](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-contracts.md), and

@@ -58,6 +58,16 @@ if(BUILD_TESTING)
   cktools_strict(ck_vision_files_decoder_fuzz_tests)
   add_test(NAME ck_vision_files_decoder_fuzz_tests COMMAND ck_vision_files_decoder_fuzz_tests)
   set_tests_properties(ck_vision_files_decoder_fuzz_tests PROPERTIES LABELS "files;fuzz" TIMEOUT 60)
+  add_executable(ck_vision_files_wp07_fault_and_crash_tests tests/files_wp07_fault_and_crash_tests.cpp)
+  target_link_libraries(ck_vision_files_wp07_fault_and_crash_tests PRIVATE ck_vision_files ck_vision_shell ck_files_platform ckvision::cvision)
+  target_include_directories(ck_vision_files_wp07_fault_and_crash_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/support)
+  target_compile_definitions(ck_vision_files_wp07_fault_and_crash_tests PRIVATE
+    CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT="${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}"
+    CKTOOLS_TEST_TEMP_ROOT="${CKTOOLS_TEST_TEMP_ROOT}")
+  cktools_strict(ck_vision_files_wp07_fault_and_crash_tests)
+  add_test(NAME ck_vision_files_wp07_fault_and_crash_tests COMMAND ck_vision_files_wp07_fault_and_crash_tests)
+  set_tests_properties(ck_vision_files_wp07_fault_and_crash_tests PROPERTIES
+    ENVIRONMENT "CKTEST_FILTER=" LABELS "files;fault;recovery" RUN_SERIAL TRUE TIMEOUT 120)
 endif()
 
 # Native ownership/finalization contracts use genuine Linux staging providers.

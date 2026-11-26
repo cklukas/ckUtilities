@@ -1,5 +1,113 @@
 # Files implementation evidence
 
+## 2026-11-26 — WP-07 fault/crash suite and 3-OS live storage, SMB, read-only, ENOSPC, and dm-flakey matrix
+
+### 1. Cross-platform WP-07 reliability, fault-injection, and real process-crash suite
+
+Added `src/vision/files/tests/files_wp07_fault_and_crash_tests.cpp` (registered
+as CTest `ck_vision_files_wp07_fault_and_crash_tests`, labels `files;fault;recovery`,
+8 tests), covering:
+- **Index-storage budget exhaustion**: `DirectoryIndexListingJob` /
+  `IndexStorageBudget` byte-limit and file-slot exhaustion with zero leaked
+  budget accounting, plus `FilesPaneService` tight-budget exhaustion preserving
+  the previously published pane (`active_location` + `read_page`) and recovering
+  on subsequent in-budget navigation.
+- **Repeated rapid cancellation & in-flight destruction**: 25–30 rapid
+  submit/cancel/supersede cycles plus 6–8 rounds of destroying
+  `FilesPaneService`, `FilesOperationPlanningService`, and
+  `FilesOperationExecutionService` while worker I/O is in-flight, asserting
+  zero worker faults and zero late wake callbacks after destruction.
+- **Real process-crash boundaries (`SIGKILL` on POSIX, `TerminateProcess` on Windows)**:
+  self-reexec child (`CKFILES_WP07_CRASH_CHILD=staging_copy` and `journal_move`)
+  creates a staging file and flushes an unfinished copy or `DestinationCommitted`
+  move journal to disk, signals `READY`, and is abruptly killed while holding
+  handles open. On restart, the parent verifies original source and prior
+  destination bytes are 100% intact, `discover_operation_recovery` +
+  `assess_operation_recovery_overlap` + `FilesOperationPlanningService` detect
+  the interrupted record by native identity and fail closed with
+  `ReconciliationRequired`, and disjoint transfers in the same workspace stay
+  unblocked.
+- **Bounded/oversized recovery & settings resilience**: tight
+  `FilesOperationRecoveryLimits` against excessive/128 KiB corrupt journals,
+  256-item untrusted overlap scans, and >1 MiB / 512 KiB-line settings payloads.
+
+Qualified `8/8` across all three OSes and all four POSIX sanitizer cohorts with
+zero warnings, leaks, UB, or data races:
+- **macOS ARM64**: Release (`0.61 s`), AppleClang ASan/UBSan (`0.72 s`),
+  Homebrew LLVM ThreadSanitizer (`4.37 s`).
+- **Linux ARM64 (`ckdev`)**: Release (`0.14 s`), Clang 19 ASan/UBSan with
+  `detect_leaks=1` (`0.96 s`), GCC 14 ThreadSanitizer.
+- **Windows x64 (`workstation`, `V:` ReFS, MSVC `19.44.35228`)**: Release
+  (`0.90 s`, using `CreateProcessW` via `windows_extended_path` and
+  `TerminateProcess`).
+
+### 2. Live 3-OS storage, SMB, read-only, ENOSPC, and `dmsetup` I/O fault matrix (`757e6fe`)
+
+- **macOS ARM64 (`Darwin 27.2.0` FSKit)**: Mounted disposable **exFAT** (32 MiB),
+  **FAT32** (`newfs_msdos -F 32`, 64 MiB), and **read-only exFAT** (`--readOnly`)
+  disk images under `/Volumes/S8T/tmp` (all detached and cleaned on exit):
+  - Observed `NamedStreams`, `ExtendedAttributes`, `PersistentAcls`,
+    `SparseFiles`, `HardLinks`, `FileCompression`, and `NativeClones` as
+    `NotAdvertised` on exFAT and FAT32 (vs `Advertised` on APFS),
+    `posix_file_size_bits=33` (4 GiB ceiling) on FAT32, `10 ms` / `2 s` mtime
+    quantization on exFAT / FAT32, and `Unsupported (errno=4)` Darwin ACLs.
+  - On read-only remount, `LocationInfo::read_only_mount=true`,
+    `create_child_file` failed closed with `Posix:30 EROFS`, and `sample.bin`
+    SHA-256 remained unchanged.
+- **Linux ARM64 (`ckdev`, `Linux 6.12.117`)**: Mounted disposable **ext4**,
+  **FAT32 (`vfat`)**, **read-only ext4** (`mount -o ro`), **tiny 2 MiB full-disk
+  ext4** (99% full, 15 KiB avail), and **Device Mapper `dm-error` / `dm-flakey`**
+  targets (all unmounted and detached cleanly):
+  - `vfat` reported `posix_file_size_bits=32`, 2s mtime / date-only atime, and
+    `EOPNOTSUPP` Linux ACLs (`location` 5/5, `name_rules` 3/3 passed).
+  - Read-only `ext4` reported `read_only_mount=true` (`0x1001`) and refused
+    `create_child_file`, `create_staging_file`, and `NativeArchiveWriteJob` with
+    `Posix:30 EROFS` while preserving `sample.bin` SHA-256.
+  - Tiny full-disk `ext4` caused `NativeArchiveWriteJob` (128 KiB payload) to
+    fail closed with `Posix:28 ENOSPC (content.pwrite)`, zero exposed partial
+    destination target (`archive.dest_exists=false`), and intact source SHA-256.
+  - Controlled storage I/O faults via `dmsetup`: `dm-error` read fault after
+    cache drop failed closed with `Posix:5 EIO (openat.child)`; `dm-flakey`
+    (`error_writes`) failed closed with `Posix:5 EIO (openat.create_child_file)`
+    and `Posix:30 EROFS (staging.create_tmpfile)` with zero exposed destination
+    target and zero crashes. (Note: `dm-error`/`dm-flakey` tests kernel I/O
+    error handling; full VM power-cut crash-consistency remains distinct.)
+- **Windows x64 (`workstation`, Windows 11 Build `26300`, `V:` Dev Drive)**:
+  Executed 5-way live volume qualification across **ReFS (`V:`)** (43/43),
+  **NTFS RW VHDX** (36/36), **exFAT VHDX**, **FAT32 VHDX**, **Read-Only NTFS
+  VHDX** (`Mount-VHD -ReadOnly`), **Tiny 16 MiB Full-Disk (`ENOSPC`) NTFS VHDX**
+  (`20,480 B` free), and a **real Windows loopback SMB share**
+  (`\\127.0.0.1\ckwp07smb261126` → ReFS), with all VHDXs/shares removed on exit:
+  - exFAT and FAT32 reported `NotAdvertised` for ADS, EAs, ACLs, sparse,
+    compression, and hard links, quantized mtime to 2s boundaries, and returned
+    `Unknown Adapter/5 (legacy_file_index.zero)` on `create_child_file`; FAT32
+    also confirmed directory `ObjectIdentity` changes on rename (distinct from
+    exFAT/NTFS/ReFS).
+  - Read-only NTFS VHDX reported `read_only_mount=true` (`FILE_READ_ONLY_VOLUME`),
+    refused `create_child_file` and `create_staging_file` with `NTSTATUS 0xC00000A2`
+    (`STATUS_MEDIA_WRITE_PROTECTED`), and left `seed.txt` SHA-256 unchanged.
+  - Tiny full-disk NTFS VHDX caused `StreamCopyJob` (2 MiB source) to fail closed
+    with `Win32 code=112 (ERROR_DISK_FULL, content.WriteFile)`, discarded staging
+    cleanly, exposed no partial destination, and left source SHA-256 intact.
+  - Loopback SMB share passed `test_files_storage_native` (7/7), 4096 B
+    write/flush/readback with `identity_same=true`, and explicitly reported
+    `Win32 code=50 (ERROR_NOT_SUPPORTED)` on handle-bound `discard_child` over SMB.
+
+| Evidence (2026-11-26 WP-07 fault, crash & 3-OS storage matrix) | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `20120f54f71875743d327b2b89dc553c5f8a75da547ca7e458c8793d827c53a1` |
+| macOS ARM64 ASan/UBSan (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `4ba1aac755324752e35a859aeaad205ee2101510d2ef43d628bfbd72bfd1161d` |
+| macOS ARM64 ThreadSanitizer (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `19ff09c698318e4ecfd27cf12d4ee4652e14ba0c83c23f09183929bb939d498d` |
+| Linux ARM64 Release (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `06451f33fff975b45087e07a32880b7526f530f15a35f71ba7cfcf8ca8d78094` |
+| Linux ARM64 ASan/UBSan (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `4f2316206824950549d43b1125eec3b68dbf308455c4321254f3cabdd2559828` |
+| Linux ARM64 ThreadSanitizer (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `64d2f42b6b560b401c9548d5a0f52d0b4eb3086cc9140ae9ccad0b47ae0d5199` |
+| Windows x64 Release (`ck_vision_files_wp07_fault_and_crash_tests`, 8/8) | `af60e7c522240d34c9fd966647236abdc20b95d570cdfac1900c64dd53c1d8d5` |
+| macOS ARM64 exFAT/read-only matrix log | `97b61ee832a270ae76fa353a653ad45546849085438a442c65f67c5eac25c72f` |
+| macOS ARM64 FAT32 matrix log | `9cfe5842a3278763a6711cadff1a5a75f2bbc365e8b40688f0be150f3d0bc72d` |
+| Linux ARM64 ext4/vfat/RO/ENOSPC matrix log | `a8416ae42d0863c676e3635b5421208ac13d26948b13693aa6fd0dc3bc6c645e` |
+| Linux ARM64 `dmsetup` (`dm-error` / `dm-flakey`) fault log | `bc3fd6f31dfff2aa910eedd909b5b672ad09487066b87b90e7e597864f02a369` |
+| Windows x64 ReFS/NTFS/exFAT/FAT32/RO/ENOSPC/SMB matrix log | `cb9e46a871ca52755e67a7cf84653dc3dc62eb8b9023f918e3f4714c714cf4f7` |
+
 ## 2026-11-25 — Windows x64 WP-07 benchmark, fuzzing, NTFS/ReFS native matrix, and WP-08 ZIP/ConPTY packaging qualification
 
 On the Windows workstation (`V:` Dev Drive, observed `ReFS`, plus a disposable
