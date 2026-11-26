@@ -1292,14 +1292,8 @@ CK_TEST(native_operation_source_retirement_refuses_unqualified_posix_compare_del
     CK_CHECK(metadata.identity.value());
     if (!metadata.identity.value()) return;
     const auto retired = directory->retire_child(name("source.bin"), *metadata.identity.value());
-#if defined(_WIN32)
-    // The Windows handle-disposition adapter is qualified separately on the
-    // mandatory workstation; this host-side source test is POSIX-only.
-    CK_CHECK(retired.value() || retired.state() != ObservationState::Unsupported);
-#else
-    CK_CHECK(!retired.value() && retired.state() == ObservationState::Unsupported);
-    CK_CHECK(fs::exists(source_path));
-#endif
+    CK_CHECK(retired.value() && *retired.value());
+    CK_CHECK(!fs::exists(source_path));
 }
 
 CK_TEST(native_operation_rename_boundary_uses_qualified_native_no_replace) {
@@ -1434,7 +1428,6 @@ CK_TEST(native_operation_delete_tree_retires_only_the_frozen_tree) {
          job->state() != OperationExecutionState::Cancelled &&
          job->state() != OperationExecutionState::NeedsReconciliation; ++step)
         job->advance();
-#if defined(_WIN32)
     const auto final_state = job->state();
     job.reset();
     root_source.reset();
@@ -1442,8 +1435,4 @@ CK_TEST(native_operation_delete_tree_retires_only_the_frozen_tree) {
     fixture_root.reset();
     CK_CHECK(final_state == OperationExecutionState::Complete);
     CK_CHECK(!fs::exists(source_path));
-#else
-    CK_CHECK(job->state() == OperationExecutionState::Failed);
-    CK_CHECK(fs::exists(source_path) && fs::exists(source_path / "nested" / "child.bin"));
-#endif
 }

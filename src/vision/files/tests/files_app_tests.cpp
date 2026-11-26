@@ -728,16 +728,12 @@ CK_TEST(files_app_status_reports_operation_reason_for_selected_row_when_other_pa
     gate->release();
     f.loaded();
 }
-CK_TEST(files_app_trash_refuses_directory_until_recursive_identity_worker_is_qualified) {
+CK_TEST(files_app_trash_enables_directory_trash_and_preserves_until_confirmed) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();
     CK_CHECK(f.app->model(0).cursor_kind() == ck::files::ObjectKind::Directory);
-    const auto reason = "Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified";
-    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.trash")));
-    CK_CHECK(f.app->availability("ck.files.trash").reason == reason);
-    CK_CHECK(f.app->status(0).find("Hint: Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified") !=
-             std::string::npos);
-    CK_CHECK(!f.command("ck.files.trash"));
+    CK_CHECK(f.application.commands().is_enabled(f.id("ck.files.trash")));
+    CK_CHECK(f.app->availability("ck.files.trash").enabled);
     CK_CHECK(std::filesystem::is_directory(f.scratch.path() / "left" / "left-item-0"));
     CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "left-item-0" / "inside.txt"));
 }
@@ -1034,8 +1030,7 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
     CK_CHECK(f.app->status(0).find("Last scan: 101 items") != std::string::npos);
     CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::RegularFile);
     CK_CHECK(f.key(ckv::Key::Home) && f.app->model(0).cursor_kind() == ObjectKind::Directory);
-    CK_CHECK(f.app->status(0).find("Hint: Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified") !=
-             std::string::npos);
+    CK_CHECK(f.app->availability("ck.files.trash").enabled);
 }
 CK_TEST(files_app_new_file_uses_strict_dialog_worker_mutation_and_refreshes_listing) {
     Fixture f;
@@ -4235,4 +4230,92 @@ CK_TEST(files_app_foreign_partial_folder_merge_preserves_destination_only_and_so
         CK_CHECK(read_text(**dst_photos_dir.value(), name_a) == "dest-A");
         CK_CHECK(read_text(**dst_photos_dir.value(), name_d) == "dest-only-D");
     }
+}
+
+CK_TEST(files_app_nc_mc_common_operations_folder_rename_swap_sync_pattern_compare_and_recursive_delete) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true, false, false, {}, false, false, true);
+    f.loaded();
+
+    // 1) Folder rename (non-empty directory) works cleanly and refreshes.
+    CK_CHECK(f.app->model(0).cursor_kind() == ck::files::ObjectKind::Directory);
+#if defined(_WIN32)
+    const auto renamed_folder = *ck::files::NativeName::from_windows(u"renamed-folder");
+#else
+    const auto renamed_folder = *ck::files::NativeName::from_posix("renamed-folder");
+#endif
+    CK_CHECK(f.app->rename(0, renamed_folder));
+    f.until([&] { return !f.app->pending(0) && std::filesystem::is_directory(f.scratch.path() / "left" / "renamed-folder"); });
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "renamed-folder" / "inside.txt"));
+
+    // 2) Recursive permanent directory deletion works on macOS, Linux, and Windows.
+    CK_CHECK(f.key(ckv::Key::Home));
+    if (f.app->selection(0).invalidated_refresh_focus) {
+        CK_CHECK(f.command("ck.files.confirm_focus"));
+        f.loaded();
+    }
+    CK_CHECK(f.app->model(0).cursor_kind() == ck::files::ObjectKind::Directory);
+    CK_CHECK(f.app->availability("ck.files.permanently_delete").enabled);
+    CK_CHECK(f.app->permanently_delete(0));
+    f.until([&] {
+        return !std::filesystem::exists(f.scratch.path() / "left" / "renamed-folder") &&
+               f.app->availability("ck.files.mark_pattern").enabled;
+    });
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "renamed-folder"));
+    if (f.app->selection(0).invalidated_refresh_focus) {
+        CK_CHECK(f.command("ck.files.confirm_focus"));
+        f.loaded();
+    }
+
+    // 3) Pattern marking (NC/MC '+' and '-') marks and unmarks matching visible rows.
+    CK_CHECK(f.app->mark_pattern(0, "left-item-1*", true));
+    f.until([&] { return !f.app->pending(0); });
+    CK_CHECK(f.app->selection(0).marks && f.app->selection(0).marks->visible > 0);
+    const auto marked_after_pattern = f.app->selection(0).marks->visible;
+    CK_CHECK(f.app->mark_pattern(0, "left-item-1*", false));
+    f.until([&] { return !f.app->pending(0); });
+    CK_CHECK(f.app->selection(0).marks && f.app->selection(0).marks->visible == 0 && marked_after_pattern > 0);
+
+    // 4) Compare directories (NC/MC Shift+F2) marks entries missing or different in the other pane.
+    CK_CHECK(f.app->compare_directories());
+    f.until([&] { return !f.app->pending(0); });
+    CK_CHECK(f.app->selection(0).marks && f.app->selection(0).marks->visible > 0);
+
+    // 5) Swap panes (NC/MC Ctrl+U) exchanges left and right pane locations.
+    const auto before_left = f.app->location(0)->display_text();
+    const auto before_right = f.app->location(1)->display_text();
+    CK_CHECK(before_left != before_right);
+    CK_CHECK(f.app->swap_panes());
+    f.until([&] { return !f.app->pending(0) && !f.app->pending(1); });
+    CK_CHECK(f.app->location(0)->display_text() == before_right);
+    CK_CHECK(f.app->location(1)->display_text() == before_left);
+
+    // 6) Sync other pane (MC Alt+I) opens active pane's folder in the inactive pane.
+    CK_CHECK(f.app->sync_other_pane());
+    f.until([&] { return !f.app->pending(0) && !f.app->pending(1); });
+    CK_CHECK(f.app->location(1)->display_text() == f.app->location(0)->display_text());
+
+    // 7) Batch permanent delete of multiple marked files (NC/MC Shift+F8 on marked set).
+    CK_CHECK(f.app->swap_panes());
+    f.until([&] { return !f.app->pending(0) && !f.app->pending(1); });
+    // Create 2 files in left pane, refresh, mark both by pattern, and batch-delete them.
+    {
+        std::ofstream out_a(f.scratch.path() / "right" / "batch-del-a.tmp", std::ios::binary);
+        out_a << "a";
+        std::ofstream out_b(f.scratch.path() / "right" / "batch-del-b.tmp", std::ios::binary);
+        out_b << "b";
+    }
+    CK_CHECK(f.app->refresh(0));
+    f.until([&] { return !f.app->pending(0); });
+    CK_CHECK(f.app->mark_pattern(0, "batch-del-*.tmp", true));
+    f.until([&] { return !f.app->pending(0); });
+    CK_CHECK(f.app->selection(0).marks && f.app->selection(0).marks->visible == 2);
+    CK_CHECK(f.app->permanently_delete(0));
+    f.until([&] {
+        return !f.app->pending(0) &&
+               !std::filesystem::exists(f.scratch.path() / "right" / "batch-del-a.tmp") &&
+               !std::filesystem::exists(f.scratch.path() / "right" / "batch-del-b.tmp");
+    });
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "batch-del-a.tmp"));
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "batch-del-b.tmp"));
 }

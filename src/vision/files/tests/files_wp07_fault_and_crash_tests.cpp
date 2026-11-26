@@ -29,6 +29,7 @@
 #include "operation_journal_file.hpp"
 #include "scratch_directory.hpp"
 #include "simulated_filesystem.hpp"
+#include "native_operation_journal_id.hpp"
 #include "sync_session.hpp"
 
 #include <cvision/testing/cktest.hpp>
@@ -44,6 +45,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -1677,6 +1679,228 @@ CK_TEST(wp07_cross_process_sync_session_coordination_blocks_overlapping_consumer
         const auto finished = (*recovered.value())->finish_io();
         CK_CHECK(finished.value() && *finished.value());
     }
+}
+
+CK_TEST(wp07_cross_process_ui_copy_blocked_by_peer_root_lease_and_recovers) {
+    const ck::testing::ScratchDirectory scratch("wp07-b05-ui-copy-lease", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto coord = scratch.path() / "coord";
+    const auto left = scratch.path() / "left";
+    const auto right = scratch.path() / "right";
+    const auto cache_l = scratch.path() / "cache-l";
+    const auto cache_r = scratch.path() / "cache-r";
+    CK_CHECK(create_private_dir(coord));
+    CK_CHECK(create_private_dir(left));
+    CK_CHECK(create_private_dir(right));
+    CK_CHECK(create_private_dir(cache_l));
+    CK_CHECK(create_private_dir(cache_r));
+    {
+        std::ofstream out(left / "doc.txt", std::ios::binary);
+        out << "b05-cross-process-payload";
+    }
+
+    const auto coord_addr = host_address(coord);
+    const auto left_addr = host_address(left);
+    const auto right_addr = host_address(right);
+    CK_CHECK(prepare_native_operation_journal_root(coord_addr).value());
+
+    std::mutex mtx_l, mtx_r;
+    std::condition_variable cv_l, cv_r;
+    FilesPaneService src_pane(native_files_pane_backend(host_address(cache_l)), {}, [&] { cv_l.notify_all(); });
+    FilesPaneService dst_pane(native_files_pane_backend(host_address(cache_r)), {}, [&] { cv_r.notify_all(); });
+    FilesOperationPlanningService planner;
+    FilesOperationExecutionService executor;
+
+    const auto nav_l = src_pane.navigate(left_addr);
+    const auto nav_r = dst_pane.navigate(right_addr);
+    CK_CHECK(nav_l.state == FilesPaneSubmission::Accepted && nav_r.state == FilesPaneSubmission::Accepted);
+    const auto rep_l = wait_pane_reply(src_pane, mtx_l, cv_l);
+    const auto rep_r = wait_pane_reply(dst_pane, mtx_r, cv_r);
+    CK_CHECK(rep_l.state == FilesPaneReplyState::Ready && rep_r.state == FilesPaneReplyState::Ready);
+
+    const auto plan_once = [&] {
+        FilesOperationPanePlanningRequest req;
+        req.operation = FileOperation::Move;
+        req.source_service = &src_pane;
+        req.destination_service = &dst_pane;
+        req.source_navigation = rep_l.navigation;
+        req.destination_navigation = rep_r.navigation;
+        req.source_stamp = rep_l.stamp;
+        req.destination_stamp = rep_r.stamp;
+        req.source_limits.held_entries = 64;
+        req.source_limits.access = EntryAccess::MetadataOnly;
+        CK_CHECK(planner.request(std::move(req)).state == FilesOperationPlanningSubmission::Accepted);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (auto r = planner.take())
+                return *r;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        throw std::runtime_error("planner timed out");
+    };
+
+    const auto run_copy = [&](const FilesOperationPlanningReply &planned) {
+        std::vector<std::size_t> issues;
+        for (std::size_t idx = 0; idx < planned.plan->issues().size(); ++idx)
+            issues.push_back(idx);
+        const auto action = issues.empty() ? ConsentAction::Proceed : ConsentAction::ContinueWithListedLosses;
+        auto receipt_obs = planned.plan->bind(action, std::move(issues));
+        CK_CHECK(receipt_obs.value() != nullptr);
+        ConsentReceipt receipt = std::move(receipt_obs).take_value();
+        FilesOperationExecutionRequest exec{
+            FileOperation::Move, &src_pane, &dst_pane,
+            rep_l.navigation, rep_r.navigation, rep_l.stamp, rep_r.stamp,
+            {}, coord_addr, {}, {},
+            [](const NativeAbsolutePath &r, const NativeName &n, bool create) {
+                return open_native_operation_journal_file(r, n, create);
+            },
+            planned.evidence, receipt, false};
+        exec.source_limits.held_entries = 64;
+        exec.source_limits.access = EntryAccess::MetadataOnly;
+        CK_CHECK(executor.request(std::move(exec)).state == FilesOperationExecutionSubmission::Accepted);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (auto r = executor.take())
+                return *r;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        throw std::runtime_error("executor timed out");
+    };
+
+    const auto planned = plan_once();
+    CK_CHECK(planned.evidence && planned.plan);
+
+    // While a peer process holds OS root locks on left/right, non-sync UI Copy MUST fail closed.
+    bool blocked_by_peer = false;
+    CK_CHECK(spawn_and_crash_child("sync_session_lock", scratch.path(), [&] {
+        const auto blocked = run_copy(planned);
+        blocked_by_peer = (blocked.state == FilesOperationExecutionState::Failed &&
+                           blocked.error && blocked.error->state == ObservationState::Changed);
+    }));
+    CK_CHECK(blocked_by_peer);
+    CK_CHECK(!std::filesystem::exists(right / "doc.txt"));
+
+    // After the peer terminates and OS releases locks, the exact same UI Copy succeeds cleanly.
+    const auto succeeded = run_copy(planned);
+    CK_CHECK(succeeded.state == FilesOperationExecutionState::Complete);
+    CK_CHECK(std::filesystem::exists(right / "doc.txt"));
+}
+
+CK_TEST(wp07_b04_cross_volume_move_retires_stable_source_and_retains_modified_or_hardlinked_source) {
+    const ck::testing::ScratchDirectory scratch("wp07-b04-move-retire", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto src = scratch.path() / "src";
+    const auto dst = scratch.path() / "dst";
+    const auto journals = scratch.path() / "journals";
+    CK_CHECK(create_private_dir(src));
+    CK_CHECK(create_private_dir(dst));
+    CK_CHECK(create_private_dir(journals));
+    const auto journals_addr = host_address(journals);
+    CK_CHECK(prepare_native_operation_journal_root(journals_addr).value());
+
+    const auto make_name = [](const char *p, const char16_t *w) {
+#if defined(_WIN32)
+        (void)p;
+        return *NativeName::from_windows(w);
+#else
+        (void)w;
+        return *NativeName::from_posix(p);
+#endif
+    };
+
+    NativeFileSystem fs;
+    auto src_dir = std::shared_ptr<DirectoryCursor>(take_obs(fs.open_directory(src), "open_src"));
+    auto dst_dir = std::shared_ptr<DirectoryCursor>(take_obs(fs.open_directory(dst), "open_dst"));
+    const auto src_dir_id = take_obs(src_dir->identity(), "src_dir_id");
+    const auto dst_dir_id = take_obs(dst_dir->identity(), "dst_dir_id");
+
+    // Case 1: Unchanged single-link regular file -> cross-volume style Move proves content+metadata
+    // stability and retires the source cleanly.
+    CK_CHECK(std::filesystem::exists(src));
+    {
+        std::ofstream out(src / "stable.bin", std::ios::binary);
+        out << "stable-move-payload-12345";
+    }
+    auto stable_move_open = src_dir->open_child(make_name("stable.bin", u"stable.bin"),
+                                                EntryAccess::ContentRead | EntryAccess::MoveSource);
+    CK_CHECK(stable_move_open.value() != nullptr);
+    if (stable_move_open.value()) {
+        const auto stable_ok = (*stable_move_open.value())->qualify_stable_content();
+        CK_CHECK(stable_ok.value() && *stable_ok.value());
+    }
+    stable_move_open = Observation<std::unique_ptr<OpenedEntry>>::unavailable(
+        ObservationState::Gone, {ErrorDomain::Adapter, 0, "release"});
+
+#if !defined(__APPLE__)
+    auto stable_entry = take_obs(src_dir->open_child(make_name("stable.bin", u"stable.bin"), EntryAccess::MetadataOnly),
+                                 "stable_entry");
+    const auto stable_id = take_obs(take_obs(stable_entry->inspect_basic(), "stable_meta").identity, "stable_id");
+    stable_entry.reset();
+
+    auto jid1 = take_obs(new_native_operation_journal_id(), "jid1");
+    auto j1 = take_obs(OperationJournal::create(FileOperation::Move, jid1, {4, 32, 64 * 1024}), "j1");
+    auto jf1 = std::shared_ptr<OperationJournalFile>(take_obs(
+        open_native_operation_journal_file(journals_addr, make_name(".ck-move-b04-1", u".ck-move-b04-1"), true), "jf1"));
+    CK_CHECK(append_operation_journal_file(*jf1, *j1, {1, 0, OperationJournalState::Planned, {}}).value());
+    NativeOperationCopyRequest req1{
+        j1, jf1, 0, src_dir, src_dir_id, make_name("stable.bin", u"stable.bin"), stable_id,
+        dst_dir, dst_dir_id, host_address(dst), make_name(".ck-stage-b04-1", u".ck-stage-b04-1"),
+        make_name("stable.bin", u"stable.bin"), {},
+        [](OpenedEntry &staging, std::stop_token) {
+            OperationMetadataRequest m;
+            m.apply_traversal_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+            m.apply_security_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+            m.apply_final_times = [](std::stop_token) { return Observation<bool>::available(true); };
+            m.flush_destination = [&staging](std::stop_token) { return staging.flush_content(); };
+            return OperationMetadataJob::create(std::move(m));
+        },
+        FileOperation::Move, {}, {}, {}, {}, {}};
+    auto job1 = take_obs(NativeOperationCopyJob::create(std::move(req1)), "job1");
+    while (job1->state() != OperationExecutionState::Complete &&
+           job1->state() != OperationExecutionState::Failed &&
+           job1->state() != OperationExecutionState::RetainedSource &&
+           job1->state() != OperationExecutionState::NeedsReconciliation)
+        job1->advance();
+    if (job1->state() != OperationExecutionState::Complete && job1->result().failure) {
+        std::fprintf(stderr, "B-04 job1 failed: state=%d op=%s code=%lld\n",
+                     static_cast<int>(job1->state()),
+                     job1->result().failure->error.operation.c_str(),
+                     static_cast<long long>(job1->result().failure->error.code));
+    }
+    CK_CHECK(job1->state() == OperationExecutionState::Complete);
+    CK_CHECK(!std::filesystem::exists(src / "stable.bin"));
+    CK_CHECK(std::filesystem::exists(dst / "stable.bin"));
+    (void)jf1->finish_io();
+#else
+    (void)dst_dir;
+    (void)src_dir_id;
+    (void)dst_dir_id;
+    // On macOS APFS (B-01), verify MoveSource detects concurrent content/metadata change and refuses retirement.
+    auto watched = take_obs(src_dir->open_child(make_name("stable.bin", u"stable.bin"),
+                                                EntryAccess::ContentRead | EntryAccess::MoveSource), "watched");
+    CK_CHECK(watched->qualify_stable_content().value());
+    {
+        std::ofstream mutate(src / "stable.bin", std::ios::binary | std::ios::app);
+        mutate << "-mutated";
+    }
+    const auto after_mutate = watched->qualify_stable_content();
+    CK_CHECK(!after_mutate.value() && after_mutate.state() == ObservationState::Changed);
+    watched.reset();
+#endif
+
+    // Case 2: Hard-linked source (link_count > 1) -> refused without deleting source.
+    {
+        std::ofstream out(src / "linked.bin", std::ios::binary);
+        out << "hardlinked-payload";
+    }
+    std::filesystem::create_hard_link(src / "linked.bin", src / "linked-alias.bin");
+    auto linked_open = src_dir->open_child(make_name("linked.bin", u"linked.bin"),
+                                           EntryAccess::ContentRead | EntryAccess::MoveSource);
+    if (linked_open.value()) {
+        const auto q = (*linked_open.value())->qualify_stable_content();
+        CK_CHECK(!q.value());
+    } else {
+        CK_CHECK(linked_open.state() == ObservationState::Unsupported);
+    }
+    CK_CHECK(std::filesystem::exists(src / "linked.bin"));
 }
 
 int main(int argc, char **argv) {

@@ -90,6 +90,11 @@ class FilesApp final {
     bool rename(std::size_t pane, ck::files::NativeName name);
     bool trash(std::size_t pane);
     bool permanently_delete(std::size_t pane);
+    bool swap_panes();
+    bool sync_other_pane();
+    bool mark_pattern(std::size_t pane, std::string pattern, bool marked);
+    bool compare_directories();
+    bool execute_recovery_action(std::size_t journal_index, FilesOperationRecoveryActionKind kind);
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);

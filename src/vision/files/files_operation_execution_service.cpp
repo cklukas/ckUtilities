@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_execution_service.hpp"
 #include "native_operation_journal_id.hpp"
+#include "sync_session.hpp"
 
 #include "native_operation_delete_tree.hpp"
 
@@ -40,6 +41,57 @@ std::optional<ck::files::UnavailableObservation> first_batch_failure(
 ck::files::UnavailableObservation error(ck::files::AdapterError code, const char* operation,
                                         ck::files::ObservationState state = ck::files::ObservationState::Failed) {
     return {state, {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
+}
+
+struct CrossProcessRootLease final {
+    CrossProcessRootLease() = default;
+    CrossProcessRootLease(CrossProcessRootLease&&) noexcept = default;
+    CrossProcessRootLease& operator=(CrossProcessRootLease&&) noexcept = default;
+    CrossProcessRootLease(const CrossProcessRootLease&) = delete;
+    CrossProcessRootLease& operator=(const CrossProcessRootLease&) = delete;
+    std::unique_ptr<ck::files::SyncSessionBackend> backend;
+    ~CrossProcessRootLease() {
+        if (backend)
+            (void)backend->finish_io();
+    }
+};
+
+// Acquire cross-process root overlap leases (B-05) via ck-core-fs-lib's native
+// sync session backend before starting a non-sync UI Copy or Move. If another
+// process holds an overlapping root lock, returns ObservationState::Changed so
+// the transfer fails closed without mutating any filesystem object.
+ck::files::Observation<std::unique_ptr<CrossProcessRootLease>> acquire_cross_process_transfer_lease(
+    const ck::files::NativeAbsolutePath& journal_root,
+    const std::optional<ck::files::NativeAbsolutePath>& source_dir,
+    const std::optional<ck::files::NativeAbsolutePath>& destination_dir) {
+    using Result = ck::files::Observation<std::unique_ptr<CrossProcessRootLease>>;
+    if (!journal_root.is_valid() || !source_dir || !source_dir->is_valid() ||
+        !destination_dir || !destination_dir->is_valid())
+        return Result::available(nullptr);
+    if (*source_dir == *destination_dir)
+        return Result::available(nullptr);
+    auto opened = ck::files::open_native_sync_session_backend(journal_root, *source_dir, *destination_dir);
+    if (opened.value()) {
+        auto lease = std::make_unique<CrossProcessRootLease>();
+        lease->backend = std::move(opened).take_value();
+        return Result::available(std::move(lease));
+    }
+    const auto* detail = opened.unavailable_detail();
+    if (!detail)
+        return Result::unavailable(ck::files::ObservationState::Failed,
+            {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(ck::files::AdapterError::InvalidAccess),
+             "files_execution.cross_process_lease"});
+    // Cross-process contention MUST always fail closed.
+    if (detail->state == ck::files::ObservationState::Changed)
+        return Result::unavailable(detail->state, detail->error);
+    // Same-folder or nested source/destination (valid for single-file Copy/KeepBoth)
+    // or non-native/synthetic test roots cannot use disjoint pair leases.
+    if (detail->error.operation == "sync_session.overlapping_pair_or_store" ||
+        detail->state == ck::files::ObservationState::Unsupported ||
+        detail->state == ck::files::ObservationState::Gone ||
+        detail->state == ck::files::ObservationState::Denied)
+        return Result::available(nullptr);
+    return Result::unavailable(detail->state, detail->error);
 }
 
 bool keep_both_supported(const FilesOperationReviewEvidence& evidence) noexcept {
@@ -600,6 +652,13 @@ struct FilesOperationExecutionService::State final {
             handoff->sources->source_path && handoff->sources->source_path->is_valid() &&
             handoff->sources->sources.empty() && handoff->sources->paths.empty();
         if (value.review_existing_tree) {
+            auto lease = acquire_cross_process_transfer_lease(
+                value.journal_root, handoff->sources->source_directory_address,
+                handoff->destination_result->address);
+            if (!lease.value()) {
+                fail(*lease.unavailable_detail());
+                return;
+            }
             run_tree_copy(result, value, *handoff->sources, *handoff->destination_result, stop_token);
             emit(std::move(result));
             return;
@@ -695,6 +754,8 @@ struct FilesOperationExecutionService::State final {
             emit(std::move(result));
             return;
         }
+        const auto source_dir_address = handoff->sources->source_directory_address;
+        const auto destination_dir_address = handoff->destination_result->address;
         auto evidence = files_operation_evidence_request(
             value.operation, std::move(*handoff->sources), *handoff->destination_result);
         if (const auto* failure = evidence.unavailable_detail()) {
@@ -736,6 +797,12 @@ struct FilesOperationExecutionService::State final {
         if (!enforce_reconciliation_gate(result, value.journal_root, *fresh.inventory,
                                          fresh.destination, fresh.source_parent)) {
             emit(std::move(result));
+            return;
+        }
+        auto cross_process_lease = acquire_cross_process_transfer_lease(
+            value.journal_root, source_dir_address, destination_dir_address);
+        if (!cross_process_lease.value()) {
+            fail(*cross_process_lease.unavailable_detail());
             return;
         }
         value.policy.allow_unhandled_metadata_loss =

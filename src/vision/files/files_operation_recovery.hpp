@@ -127,6 +127,48 @@ struct FilesOperationRecoveryReply final {
     std::optional<ck::files::UnavailableObservation> error;
 };
 
+enum class FilesOperationRecoveryActionKind {
+    ResumeRecordedJob,
+    RetryUnresolvedItems,
+    RestoreRetainedTarget,
+    DisposeRetainedTarget,
+};
+
+struct FilesOperationRecoveryActionRequest final {
+    FilesOperationRecoveryActionKind kind = FilesOperationRecoveryActionKind::ResumeRecordedJob;
+    ck::files::NativeAbsolutePath private_root;
+    ck::files::NativeName journal_name;
+    ck::files::OperationJournalId journal_id{};
+    std::vector<ck::files::NativeAbsolutePath> candidate_source_directories;
+    FilesOperationRecoveryLimits limits{};
+};
+
+struct FilesOperationRecoveryActionResult final {
+    FilesOperationRecoveryActionKind kind = FilesOperationRecoveryActionKind::ResumeRecordedJob;
+    std::size_t items_processed = 0;
+    std::size_t items_completed = 0;
+    std::size_t items_retained_source = 0;
+    bool journal_retired = false;
+    std::string summary;
+};
+
+struct FilesOperationRecoveryActionReply final {
+    FilesOperationRecoveryState state = FilesOperationRecoveryState::Failed;
+    std::optional<FilesOperationRecoveryActionResult> result;
+    std::optional<ck::files::UnavailableObservation> error;
+};
+
+// Worker-owned execution for B-02/B-03 recovery actions:
+// - ResumeRecordedJob / RetryUnresolvedItems: re-inspects the journal from
+//   private_root, verifies live parent/object identities, cleans verified
+//   unpublished staging, executes linked transfer/retirement, and retires the
+//   old journal once resolved.
+// - RestoreRetainedTarget / DisposeRetainedTarget: re-inspects the retention
+//   journal, verifies live parent and retained object identities, restores or
+//   explicitly disposes the retained version, and retires the journal.
+ck::files::Observation<FilesOperationRecoveryActionResult> execute_operation_recovery_action(
+    const FilesOperationRecoveryActionRequest &request, std::stop_token stop = {});
+
 // Read-only discovery below the already-qualified private journal root. It
 // never follows a matching symlink or turns display text back into authority.
 // Every malformed, truncated, legacy, or ambiguous record remains an explicit
@@ -146,7 +188,9 @@ class FilesOperationRecoveryService final {
 
     FilesOperationRecoverySubmission request(
         ck::files::NativeAbsolutePath private_root, FilesOperationRecoveryLimits limits = {});
+    FilesOperationRecoverySubmission request_action(FilesOperationRecoveryActionRequest action);
     std::optional<FilesOperationRecoveryReply> take();
+    std::optional<FilesOperationRecoveryActionReply> take_action();
     void request_stop() noexcept;
     void join();
     bool running() const noexcept;

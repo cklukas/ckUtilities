@@ -1,5 +1,66 @@
 # Files implementation evidence
 
+## 2026-11-26 — B-02/B-03 recovery execution, B-04 move-source stability, B-05 transfer leases, directory Trash/POSIX recursive delete, and NC/MC parity (`73c47aa`)
+
+Pinned `ck-core-fs-lib` `73c47aabf7d455fd6cf67a56e62ccfb4cb79241b` (archive SHA-256
+`eb56a1f2d376caaf981a1f6e8d22cbd5b6b25dcbcfeb78e02e304d1eaff430f7`) and implemented
+the remaining executable recovery, source-stability, cross-process lease,
+directory Trash/delete, and Norton/Midnight Commander parity workflows in `ck-files`:
+
+- **B-02 / B-03 in-app recovery execution** (`files_operation_recovery.hpp/.cpp`,
+  `files_app.cpp`): Added worker-owned `execute_operation_recovery_action` and
+  `FilesOperationRecoveryService::request_action()` wired to `Resume recorded job`,
+  `Retry unresolved items`, `Restore retained version`, and `Dispose retained version`.
+  Re-inspects the journal from the private root, verifies live parent/object
+  identities, handles `DestinationCommitted` Copy and Move (with `stop_token` and
+  empty-chunk guards on Move digest re-hash), selects `NativeOperationCopyJob(..., FileOperation::Move)`
+  for cross-volume Move recovery vs. `NativeOperationMoveJob` for same-volume Move,
+  retries numbered `.ck-replaced-<hex>-1..63` backup names on Restore collisions,
+  retires resolved journals, and surfaces pending/completed recovery status in the UI.
+- **B-04 cross-volume move source retirement** (`ck-core-fs-lib` `73c47aa`:
+  `metadata_posix.cpp`, `metadata_windows.cpp`, `native_operation_copy_job.cpp`):
+  Qualified move-source stability proof using Linux `F_SETLEASE` (`F_RDLCK`) when
+  `ContentRead | MoveSource` is held and Windows `FILE_SHARE_READ` write/delete
+  exclusion + live `BasicMetadata` stability verification (`identity`, `link_count == 1`,
+  `logical_size`, `modified`, `changed`, `windows_attributes`), retiring proven
+  stable sources and retaining modified, hard-linked, or unqualified sources.
+- **B-05 cross-process transfer coordination** (`files_operation_execution_service.cpp`):
+  Wired live cross-process root leases (`open_native_sync_session_backend`) into
+  non-sync UI Copy/Move commands when source and destination roots are disjoint,
+  blocking overlapping external consumers cleanly and recovering after release.
+- **Directory Trash & POSIX recursive permanent deletion** (`files_app.cpp`,
+  `files_operation_execution_service.cpp`): Enabled directory Trash (`F8`) and
+  frozen-inventory recursive permanent directory deletion (`Shift+F8`) on macOS
+  and Linux as well as Windows, plus batch Trash and batch Permanent Delete over
+  marked rows.
+- **NC/MC common-operations parity** (`files_app.cpp`, `suite_keymap_catalog.cpp`):
+  Added `F8` Trash, `Shift+F8` Permanent Delete, `Ctrl+U` Swap panes, `Alt+I`
+  Open active folder in other pane, `Shift+F2` Compare directories, and
+  `Marks → Mark by pattern...` / `Unmark by pattern...`, alongside existing
+  `F2` Rename (files and folders), `F3` Preview, `F4` Switch pane, `F5` Copy,
+  `F6` Move, `F7` Create folder, hard/sym links, and bookmarks.
+
+### 3-OS Verification (`ck-core-fs-lib` `73c47aa` + `ckUtilities`)
+- **macOS ARM64**: `ck-core-fs-lib` standalone Release `73/73` passed; `ckUtilities`
+  Release `10/10` passed (`ck_vision_files_tests_0..3`, settings/recovery OOM,
+  decoder fuzz, WP-07 fault/crash, `test_files_security_native`,
+  `test_files_operation_content_native`); `ckUtilities` ASan+UBSan `5/5` passed
+  with zero sanitizer diagnostics.
+- **Linux ARM64 (`ckdev`, GCC 14.2.0 `-Werror`)**: `ckUtilities` Release `10/10`
+  passed, including real Linux `F_SETLEASE` B-04 cross-volume move retirement and
+  B-05 cross-process root-lease tests.
+- **Windows x64 (`workstation`, `V:` ReFS, MSVC `19.44.35228`)**: `ck-core-fs-lib`
+  targeted suites (`native_copy_source_close_windows`, `retained_target`,
+  `verified_copy_retry`, `sync_session`, `actions_c`) passed; `ckUtilities`
+  Release **9/9** passed (`63.85 s`, `ck_vision_keymap_tests`,
+  `test_files_security_native`, `test_files_operation_content_native`,
+  `ck_vision_files_decoder_fuzz_tests`, `ck_vision_files_tests_0..3`,
+  `ck_vision_files_wp07_fault_and_crash_tests`, log SHA-256
+  `994e04a9ba0526222a4253590efdda82f8dfc8947b002aeeb3e75440169193a9`).
+- **Remaining explicit architectural gate**: Darwin APFS same-UID held-FD strong
+  publication (`B-01`) remains formally No-Go per
+  `ck-core-fs-lib/docs/darwin-protected-publication.md`.
+
 ## 2026-11-26 — Pin `ck-core-fs-lib` `84dff7c` (preflight V1/V2, same-object receipts, B-03 reconciliation, B-05 cross-process coordination) across macOS, Linux, and Windows
 
 ### 1. Backend pin & preflight / receipt alignment (`ck-core-fs-lib` `84dff7c`)

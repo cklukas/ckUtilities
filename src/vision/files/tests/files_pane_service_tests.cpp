@@ -1295,15 +1295,8 @@ CK_TEST(files_service_permanent_delete_is_identity_bound_and_has_no_posix_fallba
     const auto request = f.service->permanently_delete(before.navigation, before.stamp, before.page->rows()[0].id);
     CK_CHECK(request.state == FilesPaneSubmission::Accepted);
     const auto result = f.reply();
-#if defined(_WIN32)
     CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
     CK_CHECK(!std::filesystem::exists(source.path() / "to-delete"));
-#else
-    CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error &&
-             result.error->state == ObservationState::Unsupported &&
-             result.error->error.operation == "retire_child.native_query");
-    CK_CHECK(std::filesystem::exists(source.path() / "to-delete"));
-#endif
     f.stopped();
 }
 #if !defined(_WIN32)
@@ -1379,14 +1372,8 @@ CK_TEST(files_service_permanent_delete_only_removes_empty_directories_on_windows
     const auto request = f.service->permanently_delete(before.navigation, before.stamp, before.page->rows()[0].id);
     CK_CHECK(request.state == FilesPaneSubmission::Accepted);
     const auto result = f.reply();
-#if defined(_WIN32)
     CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
     CK_CHECK(!std::filesystem::exists(source.path() / "empty-directory"));
-#else
-    CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error &&
-             result.error->state == ObservationState::Unsupported);
-    CK_CHECK(std::filesystem::is_directory(source.path() / "empty-directory"));
-#endif
     f.stopped();
 }
 CK_TEST(files_service_short_wire_budget_never_publishes_an_incomplete_requested_viewport) {

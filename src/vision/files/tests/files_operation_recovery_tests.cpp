@@ -18,6 +18,7 @@
 #include <mutex>
 #include <span>
 #include <stdexcept>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -1030,4 +1031,248 @@ CK_TEST(files_operation_recovery_reconciliation_edge_cases_fail_closed_multi_ite
     const auto fail_closed_review = review_operation_transfer_request(degraded, retry_copy);
     CK_CHECK(!fail_closed_review.value() && fail_closed_review.unavailable_detail() &&
              fail_closed_review.unavailable_detail()->error.operation == "transfer_reconciliation.bytes");
+}
+
+CK_TEST(operation_recovery_executes_restore_and_dispose_retained_target_versions) {
+    ck::testing::ScratchDirectory scratch("files-recovery-retained-exec", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto dst_dir = scratch.path() / "dst";
+    const auto journals = scratch.path() / "journals";
+    CK_CHECK(ck::io::create_directories(dst_dir));
+    CK_CHECK(ck::io::create_directories(journals));
+    const auto root = address(journals);
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+
+    const auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+
+    NativeFileSystem fs;
+    auto dir_dst = fs.open_directory(dst_dir).take_value();
+    const auto id_dst = *dir_dst->identity().value();
+    const auto dur_dst = *NativeDurableIdentity::from_live(id_dst);
+
+    // Case 1: Restore retained target when original name is currently occupied by a newer file.
+    CK_CHECK(ck::io::write_file(dst_dir / "report.txt", "newer-replacement"));
+    CK_CHECK(ck::io::write_file(dst_dir / ".ck-retained-report.txt", "original-retained-bytes"));
+    auto retained_entry = dir_dst->open_child(leaf(".ck-retained-report.txt", u".ck-retained-report.txt"),
+                                              EntryAccess::MetadataOnly).take_value();
+    const auto retained_id = *retained_entry->inspect_basic().value()->identity.value();
+    retained_entry.reset();
+
+    OperationJournalId jid1 = journal_id();
+    jid1.bytes[2] = std::byte{0x11};
+    auto j1 = OperationJournal::create(FileOperation::Move, jid1, {4, 16, 16 * 1024}).take_value();
+    const auto jname1 = leaf(".ck-retention-restore-1.journal", u".ck-retention-restore-1.journal");
+    {
+        auto jfile = open_native_operation_journal_file(root, jname1, true).take_value();
+        NativeOperationRecoveryEvidence ev{
+            leaf("report.txt", u"report.txt"),
+            leaf(".ck-retained-report.txt", u".ck-retained-report.txt"),
+            dur_dst, *NativeDurableIdentity::from_live(retained_id), dur_dst,
+            *NativeDurableIdentity::from_live(retained_id), address(dst_dir),
+            std::array<std::byte, 32>{std::byte{0x42}}, *NativeDurableIdentity::from_live(retained_id),
+            StagingNamespace::Named, leaf("report.txt", u"report.txt")};
+        auto encoded_obs = encode_native_operation_recovery_evidence(ev);
+        CK_CHECK(encoded_obs.value() != nullptr);
+        if (!encoded_obs.value()) return;
+        const auto encoded = *encoded_obs.value();
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {1, 0, OperationJournalState::Planned, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {2, 0, OperationJournalState::Prepared, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {3, 0, OperationJournalState::CommitIntended, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {4, 0, OperationJournalState::DestinationCommitted, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {5, 0, OperationJournalState::SourceRemovalIntended, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {6, 0, OperationJournalState::SourceRetired, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j1, {7, 0, OperationJournalState::Complete, encoded}).value());
+        CK_CHECK(jfile->finish_io().value());
+    }
+
+    auto restore_res = execute_operation_recovery_action({
+        FilesOperationRecoveryActionKind::RestoreRetainedTarget, root, jname1, jid1, {}, {}});
+    CK_CHECK(restore_res.value() != nullptr);
+    if (restore_res.value()) {
+        CK_CHECK(restore_res.value()->items_completed == 1 && restore_res.value()->journal_retired);
+    }
+    CK_CHECK(!std::filesystem::exists(dst_dir / ".ck-retained-report.txt"));
+    CK_CHECK(!std::filesystem::exists(journals / ".ck-retention-restore-1.journal"));
+    {
+        std::ifstream in(dst_dir / "report.txt", std::ios::binary);
+        const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        CK_CHECK(content == "original-retained-bytes");
+    }
+
+    // Case 2: Dispose retained target version explicitly.
+    CK_CHECK(ck::io::write_file(dst_dir / ".ck-retained-old.txt", "disposable-old-bytes"));
+    auto dispose_entry = dir_dst->open_child(leaf(".ck-retained-old.txt", u".ck-retained-old.txt"),
+                                             EntryAccess::MetadataOnly).take_value();
+    const auto dispose_id = *dispose_entry->inspect_basic().value()->identity.value();
+    dispose_entry.reset();
+
+    OperationJournalId jid2 = journal_id();
+    jid2.bytes[2] = std::byte{0x22};
+    auto j2 = OperationJournal::create(FileOperation::Move, jid2, {4, 16, 16 * 1024}).take_value();
+    const auto jname2 = leaf(".ck-retention-dispose-2.journal", u".ck-retention-dispose-2.journal");
+    {
+        auto jfile = open_native_operation_journal_file(root, jname2, true).take_value();
+        NativeOperationRecoveryEvidence ev{
+            leaf("old.txt", u"old.txt"),
+            leaf(".ck-retained-old.txt", u".ck-retained-old.txt"),
+            dur_dst, *NativeDurableIdentity::from_live(dispose_id), dur_dst,
+            *NativeDurableIdentity::from_live(dispose_id), address(dst_dir),
+            std::array<std::byte, 32>{std::byte{0x43}}, *NativeDurableIdentity::from_live(dispose_id),
+            StagingNamespace::Named, leaf("old.txt", u"old.txt")};
+        auto encoded_obs = encode_native_operation_recovery_evidence(ev);
+        CK_CHECK(encoded_obs.value() != nullptr);
+        if (!encoded_obs.value()) return;
+        const auto encoded = *encoded_obs.value();
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {1, 0, OperationJournalState::Planned, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {2, 0, OperationJournalState::Prepared, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {3, 0, OperationJournalState::CommitIntended, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {4, 0, OperationJournalState::DestinationCommitted, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {5, 0, OperationJournalState::SourceRemovalIntended, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {6, 0, OperationJournalState::SourceRetired, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j2, {7, 0, OperationJournalState::Complete, encoded}).value());
+        CK_CHECK(jfile->finish_io().value());
+    }
+
+    auto dispose_res = execute_operation_recovery_action({
+        FilesOperationRecoveryActionKind::DisposeRetainedTarget, root, jname2, jid2, {}, {}});
+    CK_CHECK(dispose_res.value() != nullptr);
+    if (dispose_res.value()) {
+        CK_CHECK(dispose_res.value()->items_completed == 1 && dispose_res.value()->journal_retired);
+    }
+    CK_CHECK(!std::filesystem::exists(dst_dir / ".ck-retained-old.txt"));
+    CK_CHECK(!std::filesystem::exists(journals / ".ck-retention-dispose-2.journal"));
+}
+
+CK_TEST(operation_recovery_executes_resume_and_retry_for_interrupted_transfer_journal) {
+    ck::testing::ScratchDirectory scratch("files-recovery-resume-exec", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto src_dir = scratch.path() / "src";
+    const auto dst_dir = scratch.path() / "dst";
+    const auto journals = scratch.path() / "journals";
+    CK_CHECK(ck::io::create_directories(src_dir));
+    CK_CHECK(ck::io::create_directories(dst_dir));
+    CK_CHECK(ck::io::create_directories(journals));
+    const auto root = address(journals);
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+
+    const auto leaf = [](const char *posix_text, const char16_t *win_text) {
+#if defined(_WIN32)
+        (void)posix_text;
+        return *NativeName::from_windows(win_text);
+#else
+        (void)win_text;
+        return *NativeName::from_posix(posix_text);
+#endif
+    };
+
+    CK_CHECK(ck::io::write_file(src_dir / "payload.bin", "interrupted-transfer-payload"));
+    CK_CHECK(ck::io::write_file(dst_dir / ".ck-partial-stage", "partial-unpublished"));
+
+    NativeFileSystem fs;
+    auto dir_src = fs.open_directory(src_dir).take_value();
+    auto dir_dst = fs.open_directory(dst_dir).take_value();
+    const auto dur_src = *NativeDurableIdentity::from_live(*dir_src->identity().value());
+    const auto dur_dst = *NativeDurableIdentity::from_live(*dir_dst->identity().value());
+
+    auto src_entry = dir_src->open_child(leaf("payload.bin", u"payload.bin"), EntryAccess::MetadataOnly).take_value();
+    const auto src_id = *NativeDurableIdentity::from_live(*src_entry->inspect_basic().value()->identity.value());
+    src_entry.reset();
+
+    auto stage_entry = dir_dst->open_child(leaf(".ck-partial-stage", u".ck-partial-stage"),
+                                           EntryAccess::MetadataOnly).take_value();
+    const auto stage_id = *NativeDurableIdentity::from_live(*stage_entry->inspect_basic().value()->identity.value());
+    stage_entry.reset();
+
+    OperationJournalId jid = journal_id();
+    jid.bytes[2] = std::byte{0x33};
+    auto j = OperationJournal::create(FileOperation::Move, jid, {4, 16, 16 * 1024}).take_value();
+    const auto jname = leaf(".ck-move-journal-interrupted", u".ck-move-journal-interrupted");
+    {
+        auto jfile = open_native_operation_journal_file(root, jname, true).take_value();
+        NativeOperationRecoveryEvidence ev{
+            leaf(".ck-partial-stage", u".ck-partial-stage"),
+            leaf("payload.bin", u"payload.bin"),
+            dur_src, src_id, dur_dst, stage_id, address(dst_dir),
+            std::nullopt, std::nullopt, StagingNamespace::Named,
+            leaf("payload.bin", u"payload.bin")};
+        auto encoded_obs = encode_native_operation_recovery_evidence(ev);
+        CK_CHECK(encoded_obs.value() != nullptr);
+        if (!encoded_obs.value()) return;
+        const auto encoded = *encoded_obs.value();
+        CK_CHECK(append_operation_journal_file(*jfile, *j, {1, 0, OperationJournalState::Planned, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j, {2, 0, OperationJournalState::Prepared, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *j, {3, 0, OperationJournalState::Copied, encoded}).value());
+        CK_CHECK(jfile->finish_io().value());
+    }
+
+    auto resumed = execute_operation_recovery_action({
+        FilesOperationRecoveryActionKind::ResumeRecordedJob,
+        root, jname, jid, {address(src_dir), address(dst_dir)}, {}});
+    if (!resumed.value() && resumed.unavailable_detail())
+        std::fprintf(stderr, "resume error: %s\n", resumed.unavailable_detail()->error.operation.c_str());
+    CK_CHECK(resumed.value() != nullptr);
+    if (resumed.value()) {
+        CK_CHECK(resumed.value()->items_processed == 1 && resumed.value()->items_completed == 1 &&
+                 resumed.value()->journal_retired);
+    }
+    CK_CHECK(!std::filesystem::exists(dst_dir / ".ck-partial-stage"));
+    CK_CHECK(!std::filesystem::exists(journals / ".ck-move-journal-interrupted"));
+    CK_CHECK(std::filesystem::exists(dst_dir / "payload.bin"));
+    {
+        std::ifstream in(dst_dir / "payload.bin", std::ios::binary);
+        const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        CK_CHECK(content == "interrupted-transfer-payload");
+    }
+
+    // Also verify Copy recovery when destination was already committed (DestinationCommitted)
+    // completes cleanly without failing with Exists, and RestoreRetainedTarget handles
+    // backup name collision by falling back to a numbered suffix.
+    CK_CHECK(ck::io::write_file(src_dir / "copied.bin", "committed-copy-bytes"));
+    CK_CHECK(ck::io::write_file(dst_dir / "copied.bin", "committed-copy-bytes"));
+    auto copied_src = dir_src->open_child(leaf("copied.bin", u"copied.bin"), EntryAccess::MetadataOnly).take_value();
+    const auto copied_src_id = *NativeDurableIdentity::from_live(*copied_src->inspect_basic().value()->identity.value());
+    copied_src.reset();
+    auto copied_dst = dir_dst->open_child(leaf("copied.bin", u"copied.bin"), EntryAccess::MetadataOnly).take_value();
+    const auto copied_dst_id = *NativeDurableIdentity::from_live(*copied_dst->inspect_basic().value()->identity.value());
+    copied_dst.reset();
+
+    OperationJournalId cjid = journal_id();
+    cjid.bytes[2] = std::byte{0x44};
+    auto cj = OperationJournal::create(FileOperation::Copy, cjid, {4, 16, 16 * 1024}).take_value();
+    const auto cjname = leaf(".ck-copy-journal-committed", u".ck-copy-journal-committed");
+    {
+        auto jfile = open_native_operation_journal_file(root, cjname, true).take_value();
+        NativeOperationRecoveryEvidence ev{
+            leaf(".ck-copy-stage", u".ck-copy-stage"),
+            leaf("copied.bin", u"copied.bin"),
+            dur_src, copied_src_id, dur_dst, std::nullopt, address(dst_dir),
+            std::array<std::byte, 32>{std::byte{0x44}}, copied_dst_id, StagingNamespace::Named,
+            leaf("copied.bin", u"copied.bin")};
+        auto encoded_obs = encode_native_operation_recovery_evidence(ev);
+        CK_CHECK(encoded_obs.value() != nullptr);
+        if (!encoded_obs.value()) return;
+        const auto encoded = *encoded_obs.value();
+        CK_CHECK(append_operation_journal_file(*jfile, *cj, {1, 0, OperationJournalState::Planned, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *cj, {2, 0, OperationJournalState::Prepared, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *cj, {3, 0, OperationJournalState::Copied, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *cj, {4, 0, OperationJournalState::Verified, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *cj, {5, 0, OperationJournalState::CommitIntended, encoded}).value());
+        CK_CHECK(append_operation_journal_file(*jfile, *cj, {6, 0, OperationJournalState::DestinationCommitted, encoded}).value());
+        CK_CHECK(jfile->finish_io().value());
+    }
+    auto copy_resumed = execute_operation_recovery_action({
+        FilesOperationRecoveryActionKind::ResumeRecordedJob,
+        root, cjname, cjid, {address(src_dir), address(dst_dir)}, {}});
+    CK_CHECK(copy_resumed.value() != nullptr);
+    if (copy_resumed.value()) {
+        CK_CHECK(copy_resumed.value()->items_completed == 1 && copy_resumed.value()->journal_retired);
+    }
+    CK_CHECK(!std::filesystem::exists(journals / ".ck-copy-journal-committed"));
+    CK_CHECK(std::filesystem::exists(dst_dir / "copied.bin"));
 }

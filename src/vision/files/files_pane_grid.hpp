@@ -34,6 +34,7 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     bool current() const noexcept;
     std::optional<FilesPaneRowTarget> target() const;
     const ck::files::PaneDisplayRow *cursor_row() const noexcept;
+    const std::vector<ck::files::PaneDisplayRow> *visible_rows() const noexcept { return rows(); }
     std::optional<bool> cursor_marked() const;
     std::optional<ck::files::ObjectKind> cursor_kind() const;
     std::optional<FilesVolumeRecord> volume_cursor() const;

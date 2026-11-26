@@ -163,14 +163,17 @@ clipboard.
   explicit committed, retained, skipped, failed, and indeterminate results.
 - Same-filesystem moves use identity-bound native rename when qualified.
   Cross-filesystem moves use copy, independent stream verification, durable
-  destination publication, and only then qualified source retirement.
-  Where a recursive move can publish a verified destination tree, Files
-  retains the original until the filesystem can prove source stability.
-  Tree operations never follow links or silently include new children.
-- **Move to Trash / Recycle Bin** confirms the selected entry and revalidates
-  its identity on the worker. Directory Trash is currently disabled in Files.
-  An unsupported entry stays in place, and an uncertain outcome is reported
-  for review.
+  destination publication, and only then qualified source retirement (using
+  Linux `F_SETLEASE` / Windows `FILE_SHARE_READ` exclusion plus live metadata
+  stability verification; modified, hard-linked, or unqualified sources remain
+  retained). Non-sync UI Copy/Move operations also acquire cross-process root
+  leases when source and destination roots are disjoint, blocking competing
+  processes cleanly. Tree operations never follow links or silently include
+  new children.
+- **Move to Trash / Recycle Bin** (**F8**) confirms the selected entry (or all
+  marked entries, including directories) and revalidates each identity on the
+  worker. An unsupported entry stays in place, and an uncertain outcome is
+  reported for review.
 - **Inspect operation recovery** shows a read-only scan of copy, move, and
   recursive-delete journals. The scan runs at startup and after file operations.
   Interrupted moves with exact name receipts show their source and destination
@@ -178,28 +181,29 @@ clipboard.
   and shows the original target name, the recorded or proposed retained name,
   and the recorded destination folder when available. Malformed, truncated,
   legacy, ambiguous, or untrusted records remain
-  visible as reconciliation items. **Clean up operation staging** is disabled
-  for recovered journals: cleanup requires the originating copy worker's live
-  ownership of the created staging object. Reopened journal IDs and names do
-  not provide that authority. No resume, retry, replacement, publication, or source retirement
-  is offered without a later qualified worker boundary. When a Copy or Move
-  overlaps an unfinished, retained-source, or untrusted operation journal by
-  native source or destination identity—even after a rename—planning and
-  execution hold the transfer and open **Reconciliation required** instead of
-  bypassing the unresolved record, displaying the backend's reconciliation
+  visible as reconciliation items. From **Operation recovery review**, Files
+  exposes worker-owned **Resume recorded job**, **Retry unresolved items**,
+  **Restore retained version**, and **Dispose retained version** actions, which
+  re-inspect the journal from the private root, verify live parent and object
+  identities (parking any colliding destination safely during restore), execute
+  the linked transfer/retirement or retention action, and retire the resolved
+  journal. **Clean up operation staging** remains disabled for standalone
+  restart inspection because live creator ownership is required. When a Copy
+  or Move overlaps an unfinished, retained-source, or untrusted operation
+  journal by native source or destination identity—even after a rename—planning
+  and execution hold the transfer and open **Reconciliation required** instead
+  of bypassing the unresolved record, displaying the backend's reconciliation
   disposition, per-item review classification, and retry-lineage status.
   Ordinary-copy journals
   also retain the independently verified whole-file SHA-256 receipt at the
   Copied and Verified boundaries; it is used for future reconciliation only,
-  never as pathname-based authority. A worker-only read-only verifier can
-  independently rebind the destination parent and check the published object
-  identity, length, and content digest; it does not expose a mutation or
-  recovery command.
-- **Delete permanently** requires an explicit confirmation. On the qualified
-  Windows path, directory deletion reviews a frozen inventory and revalidates
-  each entry before removal. The worker preserves links as boundaries and
-  keeps children that appeared after review. Directory deletion is disabled
-  on macOS and Linux.
+  never as pathname-based authority.
+- **Delete permanently** (**Shift+F8**) requires an explicit confirmation and
+  supports individual entries, directories (including recursive directory
+  deletion on Windows, macOS, and Linux), and batches of marked entries.
+  Directory deletion reviews a frozen inventory and revalidates each entry
+  before removal, preserving links as boundaries and keeping children that
+  appeared after review.
 - Preservation and capability reporting for data streams, extended
   attributes, permissions and ACLs, ownership, timestamps, flags, links,
   sparse/compressed storage, names, provider-managed objects, and filesystem
@@ -232,12 +236,19 @@ closes. Startup reading uses the same opened file for its bytes and revision.
 | F5 | Copy |
 | F6 | Move |
 | F7 | Create folder |
+| F8 | Move to Trash / Recycle Bin (single, directory, or marked batch) |
+| Shift+F8 | Delete permanently (single, recursive directory, or marked batch) |
+| F2 | Rename file or folder |
+| Shift+F2 | Compare directories |
+| Ctrl+U | Swap panes |
+| Alt+I | Open active folder in other pane |
+| Marks menu | Mark / Unmark by pattern |
 | Esc | Cancel the current activity or dismiss the dialog |
 | Operations menu | Create empty file |
 | Operations menu | Create hard link |
 | Operations menu | Create symbolic link (qualified POSIX adapters) |
 | Operations menu | Inspect link target (qualified link/reparse rows) |
-| F2 | Rename |
+| Operations menu | Resume recorded job / Retry unresolved items / Restore or Dispose retained version |
 | Ctrl+R | Refresh |
 | F1 | Context help |
 | Alt+X | Quit |

@@ -94,12 +94,11 @@ CK_TEST(native_move_source_access_is_explicitly_qualified) {
     CK_CHECK(name.has_value());
     if (!name) return;
     auto opened = parent->open_child(*name, EntryAccess::ContentRead | EntryAccess::MoveSource);
-#if defined(_WIN32)
-    CK_CHECK(opened.value());
-#else
-    CK_CHECK(!opened.value() && opened.state() == ObservationState::Unsupported &&
-             opened.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::UnsupportedQuery));
-#endif
+    CK_CHECK(opened.value() != nullptr);
+    if (opened.value()) {
+        const auto stable = (*opened.value())->qualify_stable_content();
+        CK_CHECK(stable.value() && *stable.value());
+    }
 }
 
 #if defined(_WIN32)

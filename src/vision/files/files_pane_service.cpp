@@ -786,6 +786,7 @@ struct FilesPaneService::State {
                                 parent_path = std::move(child).take_value();
                             }
                             FilesPaneOperationSources result;
+                            result.source_directory_address = parent_path;
                             const auto &sources = **completed.value();
                             result.sources.reserve(sources.sources().size());
                             result.paths.reserve(sources.sources().size());

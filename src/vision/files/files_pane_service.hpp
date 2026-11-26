@@ -102,6 +102,7 @@ struct FilesPaneOperationSources final {
     ck::files::HeldChild::Pointer root_source;
     std::shared_ptr<ck::files::DirectoryCursor> source_root;
     std::optional<ck::files::NativeAbsolutePath> source_path;
+    std::optional<ck::files::NativeAbsolutePath> source_directory_address;
 };
 // Worker-created, read-only ancestry witness paired with the destination.
 // Neither cursor is exposed to UI state or treated as mutation authority.

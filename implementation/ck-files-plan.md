@@ -588,24 +588,16 @@ flows; their cross-platform release qualification remains in WP-07/WP-08.
 - [x] Implement review dialogs for preservation loss, uncertainty, collisions,
   destination replacement and explicit directory merges.
 - [x] Bind user decisions to plan identity and invalidate them on relevant change.
-- [~] Add reconciliation-aware repeat planning: distinguish original-job resume,
+- [x] Add reconciliation-aware repeat planning: distinguish original-job resume,
   linked retry and a new transfer; protect previously committed and
   destination-only entries. Changed/new source children require explicit scope
   review. Qualify foreign partial-folder merge with no trustworthy journal.
-  Frontend `ddeddd4` / `142cd1c` implements identity-based worker overlap checks
-  during both planning and pre-execution (failing closed on unfinished,
-  `RetainedSource`, or untrusted journals with a modal `Reconciliation required`
-  review and recovery-inspector handoff while allowing disjoint transfers),
-  syncs unmarked single-row focus before planning, and qualifies conservative
-  foreign partial-folder merge across macOS, Linux, and Windows Release plus
-  macOS and Linux ASan/UBSan and ThreadSanitizer. Pinned `ck-core-fs-lib`
-  `84dff7c` wires `inspect_transfer_journals` and `review_transfer_request`
-  (B-03) directly into `discover_operation_recovery`,
-  `assess_operation_recovery_overlap`, `review_operation_transfer_request`, and
-  the `Reconciliation required` / `Operation recovery review` dialogs across
-  macOS, Linux, and Windows (R-02/R-03/R-04). Execution-side original-job
-  resume and linked-retry actions remain gated under B-03. See the
-  [reconciliation qualification record](ck-files-progress.md#2026-11-26--pin-ck-core-fs-lib-84dff7c-preflight-v1v2-same-object-receipts-b-03-reconciliation-b-05-cross-process-coordination-across-macos-linux-and-windows).
+  Pinned `ck-core-fs-lib` `73c47aa` + `ckUtilities` wire `inspect_transfer_journals`,
+  `review_transfer_request`, and worker-owned `execute_operation_recovery_action`
+  (`Resume recorded job`, `Retry unresolved items`, `Restore retained version`,
+  `Dispose retained version`) into `files_operation_recovery` and `files_app`,
+  verified across macOS, Linux, and Windows Release plus macOS ASan/UBSan. See the
+  [B-02..B-05 & NC/MC parity record](ck-files-progress.md#2026-11-26--b-02b-03-recovery-execution-b-04-move-source-stability-b-05-transfer-leases-directory-trashposix-recursive-delete-and-ncmc-parity-73c47aa).
 
 Acceptance: tests demonstrate separate consent for missing ADS/resource forks,
 ACL/security changes, sparse expansion, timestamp precision, hard-link loss,
@@ -623,8 +615,11 @@ causes no mutation. Concurrent substitutions force revalidation/new decisions.
 - [~] Deterministic I/O/journal/commit failure tests exist. Complete the actual
   app kill/relaunch, repeated recovery and interrupted-move resubmission matrix;
   inspection or safe refusal does not qualify successful recovery.
-- [ ] Preserve old destination versions through replacement and restart; expose
+- [x] Preserve old destination versions through replacement and restart; expose
   reviewed restore and explicit disposal with bounded retention accounting.
+  (`Restore retained version` and `Dispose retained version` wired via
+  `execute_operation_recovery_action` with collision-safe `.ck-replaced-*`
+  parking and live identity verification across macOS, Linux, and Windows.)
 - [ ] Qualify file-level checkpoints, journal migration, missing-volume handling
   and repeat submission against R-01–04/R-06–09. Mid-file resume is optional,
   but safe restart of the overall job is not.
@@ -668,17 +663,16 @@ always states its irreversibility; cancellation outcomes reflect actual effects.
   external processes. No unbounded job queue or concurrent conflicting writes.
 - [x] Ensure every progress/result message is derived from engine state.
   Keep Cancel, Skip and Retry distinct; retry creates a revalidated plan.
-- [ ] Expose Resume recorded job and Retry unresolved items only after backend
+- [x] Expose Resume recorded job and Retry unresolved items only after backend
   reconciliation; neither is an unqualified repeat of Copy/Move. Show confirmed
   copies, remaining sources, retained versions and unknown outcomes separately.
-- [~] Coordinate conflicting jobs across Files and other backend consumers;
+- [x] Coordinate conflicting jobs across Files and other backend consumers;
   in-process UI serialization is insufficient for a shared backend (B-05).
   Cross-process OS-level ancestor/root lock coordination via
-  `open_native_sync_session_backend` (including crash-abandoned lock release
-  after `SIGKILL` / `TerminateProcess`) is qualified across macOS, Linux, and
-  Windows (`wp07_cross_process_sync_session_coordination_blocks_overlapping_consumer`,
-  R-11); wiring live root leases across arbitrary non-sync transfer commands
-  remains open.
+  `open_native_sync_session_backend` is now wired into non-sync UI Copy/Move
+  commands for disjoint roots (`wp07_cross_process_ui_copy_blocked_by_peer_root_lease_and_recovers`
+  and `wp07_cross_process_sync_session_coordination_blocks_overlapping_consumer`,
+  verified across macOS, Linux, and Windows).
 
 Acceptance: full workflows work without function keys or mouse; focus returns
 correctly after dialogs, active jobs survive pane navigation, close is safe,

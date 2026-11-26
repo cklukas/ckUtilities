@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <iomanip>
+#include <map>
 #include <numeric>
 #include <sstream>
 #include <utility>
@@ -232,6 +233,92 @@ class ArchiveRecoveryList final : public ckv::widgets::ListModel {
     std::size_t review_count_ = 0;
 };
 
+bool glob_match(std::string_view pattern, std::string_view text) noexcept {
+    std::size_t p = 0, t = 0;
+    std::size_t star_p = std::string_view::npos, star_t = 0;
+    while (t < text.size()) {
+        if (p < pattern.size() && (pattern[p] == '?' || pattern[p] == text[t])) {
+            ++p;
+            ++t;
+        } else if (p < pattern.size() && pattern[p] == '*') {
+            star_p = p++;
+            star_t = t;
+        } else if (star_p != std::string_view::npos) {
+            p = star_p + 1;
+            t = ++star_t;
+        } else {
+            return false;
+        }
+    }
+    while (p < pattern.size() && pattern[p] == '*')
+        ++p;
+    return p == pattern.size();
+}
+
+class OperationRecoveryList final : public ckv::widgets::ListModel {
+  public:
+    explicit OperationRecoveryList(std::shared_ptr<const FilesOperationRecoveryScan> scan)
+        : scan_(std::move(scan)) {}
+    std::size_t item_count() const override { return scan_ ? scan_->journals.size() : 0; }
+    std::optional<std::size_t> index_of(ckv::widgets::ListItemId id) const override {
+        return id > 0 && id <= item_count() ? std::optional<std::size_t>(id - 1) : std::nullopt;
+    }
+    ckv::widgets::ListItem item_at(std::size_t index) const override {
+        const auto &item = scan_->journals[index];
+        const char *tag = item.kind == FilesOperationJournalKind::RetainedTarget ? "Retained" : "Transfer";
+        if (item.error)
+            return {index + 1, std::string("[") + tag + " Error] " + item.display_name};
+        std::string state = "Review";
+        if (item.report && !item.report->inspection.report.items.empty())
+            state = archive_recovery_state(item.report->inspection.report.items.front().state);
+        return {index + 1, std::string("[") + tag + ": " + state + "] " + item.display_name};
+    }
+    std::string details(std::size_t index) const {
+        const auto &item = scan_->journals[index];
+        std::ostringstream out;
+        out << "Journal: " << item.display_name << '\n';
+        const bool retention = item.kind == FilesOperationJournalKind::RetainedTarget;
+        if (retention)
+            out << "Previous target version\n";
+        if (item.report) {
+            const auto &inspection = item.report->inspection;
+            out << "Items: " << inspection.report.items.size() << '\n';
+            for (const auto &recovery : inspection.report.items) {
+                out << "State: " << archive_recovery_state(recovery.state)
+                    << "; action: " << archive_recovery_action(recovery.action) << '\n';
+                for (const auto &art : inspection.artifacts) {
+                    if (art.item == recovery.item && art.evidence) {
+                        const auto &entry = *art.evidence;
+                        if (retention) {
+                            out << "Original target: " << entry.source_name.value_or(entry.staging_name).display_name() << '\n'
+                                << "Retained name: " << entry.destination_name.display_name() << '\n';
+                            if (entry.destination_address)
+                                out << "Recorded folder: " << entry.destination_address->display_text() << '\n';
+                        } else if (entry.source_name) {
+                            out << "Source: " << entry.source_name->display_name() << '\n'
+                                << "Destination: " << entry.destination_name.display_name() << '\n';
+                            if (entry.destination_address)
+                                out << "Recorded folder: " << entry.destination_address->display_text() << '\n';
+                        }
+                        break;
+                    }
+                }
+            }
+            if (inspection.report.has_untrusted_tail)
+                out << "Journal tail: untrusted\n";
+            if (inspection.has_untrusted_evidence)
+                out << "Native evidence: review required\n";
+        } else if (item.error) {
+            out << "Inspection error: " << item.error->error.operation << '\n';
+        }
+        return out.str();
+    }
+    const FilesOperationRecoveryItem &journal(std::size_t index) const { return scan_->journals[index]; }
+
+  private:
+    std::shared_ptr<const FilesOperationRecoveryScan> scan_;
+};
+
 std::optional<std::string> preview_utf8(const FilesPanePreview &preview) {
     std::string text;
     if (preview.bytes.empty())
@@ -387,6 +474,10 @@ struct FilesApp::State {
              deleting = false, trashing = false, creating_file = false, creating_hard_link = false,
              creating_symbolic_link = false;
         std::optional<FilesPaneReplyKind> changing;
+        std::vector<ck::files::IndexedMarkCommand> queued_marks;
+        enum class BatchDeleteKind { None, Trash, PermanentDelete };
+        BatchDeleteKind batch_delete_kind = BatchDeleteKind::None;
+        std::vector<std::string> batch_delete_names;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
         std::vector<std::shared_ptr<const FilesPaneLocation>> history;
@@ -463,6 +554,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> archive_cleanup_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_cleanup_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> mark_pattern_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> tree_copy_dialog;
     ckv::widgets::Window *tree_copy_window = nullptr;
@@ -551,6 +643,17 @@ struct FilesApp::State {
     ckv::ui::CommandId archive_cleanup_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId operation_recovery_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId operation_recovery_cleanup_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId resume_recovery_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId retry_recovery_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId restore_retained_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId dispose_retained_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId swap_panes_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId sync_other_pane_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId compare_directories_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId mark_pattern_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId unmark_pattern_id = ckv::ui::kInvalidCommand;
+    bool operation_recovery_action_pending = false;
+    std::string operation_recovery_action_status;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
@@ -686,6 +789,32 @@ struct FilesApp::State {
             operation_recovery_cleanup_id = own(
                 "ck.files.cleanup_operation_recovery", [this] { show_operation_recovery_cleanup(); },
                 [this] { return availability("ck.files.cleanup_operation_recovery").enabled; });
+            resume_recovery_id = own(
+                "ck.files.resume_operation_recovery",
+                [this] { execute_first_recovery_action(FilesOperationRecoveryActionKind::ResumeRecordedJob); },
+                [this] { return availability("ck.files.resume_operation_recovery").enabled; });
+            retry_recovery_id = own(
+                "ck.files.retry_operation_recovery",
+                [this] { execute_first_recovery_action(FilesOperationRecoveryActionKind::RetryUnresolvedItems); },
+                [this] { return availability("ck.files.retry_operation_recovery").enabled; });
+            restore_retained_id = own(
+                "ck.files.restore_retained_target",
+                [this] { execute_first_recovery_action(FilesOperationRecoveryActionKind::RestoreRetainedTarget); },
+                [this] { return availability("ck.files.restore_retained_target").enabled; });
+            dispose_retained_id = own(
+                "ck.files.dispose_retained_target",
+                [this] { execute_first_recovery_action(FilesOperationRecoveryActionKind::DisposeRetainedTarget); },
+                [this] { return availability("ck.files.dispose_retained_target").enabled; });
+            swap_panes_id = own("ck.files.swap_panes", [this] { swap_panes(); },
+                                [this] { return availability("ck.files.swap_panes").enabled; });
+            sync_other_pane_id = own("ck.files.sync_other_pane", [this] { sync_other_pane(); },
+                                     [this] { return availability("ck.files.sync_other_pane").enabled; });
+            compare_directories_id = own("ck.files.compare_directories", [this] { compare_directories(); },
+                                         [this] { return availability("ck.files.compare_directories").enabled; });
+            mark_pattern_id = own("ck.files.mark_pattern", [this] { show_mark_pattern(true); },
+                                  [this] { return availability("ck.files.mark_pattern").enabled; });
+            unmark_pattern_id = own("ck.files.unmark_pattern", [this] { show_mark_pattern(false); },
+                                    [this] { return availability("ck.files.unmark_pattern").enabled; });
             const auto visible_ready = [this] { return availability("ck.files.mark_visible").enabled; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -748,7 +877,8 @@ struct FilesApp::State {
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
                      item(properties_id, "Propert&ies..."), item(preview_id, "Pre&view"),
                      item(copy_path_id, "Cop&y path"),
-                     item(switch_id, "S&witch pane"), item(cancel_id, "&Cancel activity")}},
+                     item(switch_id, "S&witch pane"), item(swap_panes_id, "S&wap panes"),
+                     item(sync_other_pane_id, "Open in &other pane"), item(cancel_id, "&Cancel activity")}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
                                                             item(create_file_id, "New &file..."),
                                                             item(create_hard_link_id, "New &hard link..."),
@@ -766,7 +896,9 @@ struct FilesApp::State {
                 ckv::widgets::MenuBarItem{
                     "&Marks",
                     {item(toggle, "&Toggle mark"), item(mark_visible, "&Mark visible"),
-                     item(unmark_visible, "&Unmark visible"), item(invert, "&Invert visible marks"),
+                     item(unmark_visible, "&Unmark visible"), item(mark_pattern_id, "Mark by &pattern..."),
+                     item(unmark_pattern_id, "Unmark by p&attern..."), item(compare_directories_id, "Co&mpare directories"),
+                     item(invert, "&Invert visible marks"),
                      item(clear, "&Clear all marks (including hidden)"), item(confirm_focus, "Use current &row"),
                      item(range, "&Set range start"),
                      item(mark_range, "Mark th&rough cursor"), item(unmark_range, "Unmark through curs&or")}},
@@ -1115,6 +1247,7 @@ struct FilesApp::State {
                (rename_dialog && !rename_dialog->completed()) ||
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
+               (mark_pattern_dialog && !mark_pattern_dialog->completed()) ||
                archive_recovery_open() ||
                reconciliation_overlap_open() ||
                (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) ||
@@ -1400,20 +1533,63 @@ struct FilesApp::State {
                 return unavailable("Operation unavailable: select a current entry");
             if (panes[active].read_only_mount.value_or(false))
                 return unavailable(std::string(label) + " unavailable: active mount is read-only");
-            if (command == "ck.files.trash" &&
-                panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
-                return unavailable("Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified");
             if (command == "ck.files.permanently_delete") {
                 if (panes[active].model.cursor_kind() != ck::files::ObjectKind::Directory)
                     return FilesCommandAvailability::available();
-#if !defined(_WIN32)
-                return unavailable("Delete unavailable: identity-bound retirement is not qualified on this platform");
-#else
-                if (panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory &&
-                    (!execution_service || !operation_journal_root || operation_execution_request))
+                if (!execution_service || !operation_journal_root || operation_execution_request)
                     return unavailable("Delete unavailable: recursive deletion worker is not ready");
-#endif
             }
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.swap_panes") {
+            if (modal_pending())
+                return unavailable("Swap panes unavailable: a dialog is open");
+            if (panes[0].volume_view || panes[1].volume_view || !panes[0].active || !panes[1].active)
+                return unavailable("Swap panes unavailable: both panes need active locations");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.sync_other_pane") {
+            if (modal_pending())
+                return unavailable("Open in other pane unavailable: a dialog is open");
+            if (panes[active].volume_view || !panes[active].active)
+                return unavailable("Open in other pane unavailable: active pane has no folder location");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.compare_directories") {
+            if (modal_pending())
+                return unavailable("Compare directories unavailable: a dialog is open");
+            if (!ready(0) || !ready(1) || panes[0].volume_view || panes[1].volume_view)
+                return unavailable("Compare directories unavailable: both panes must be ready");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.mark_pattern" || command == "ck.files.unmark_pattern") {
+            if (modal_pending())
+                return unavailable("Pattern selection unavailable: a dialog is open");
+            if (!ready(active) || panes[active].volume_view)
+                return unavailable("Pattern selection unavailable: active pane is not ready");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.resume_operation_recovery" ||
+            command == "ck.files.retry_operation_recovery" ||
+            command == "ck.files.restore_retained_target" ||
+            command == "ck.files.dispose_retained_target") {
+            if (!operation_recovery_service || !operation_journal_root)
+                return unavailable("Operation recovery execution unavailable: service not configured");
+            if (operation_recovery_request || operation_recovery_action_pending)
+                return unavailable("Operation recovery is busy");
+            if (!operation_recovery_scan || operation_recovery_scan->journals.empty())
+                return unavailable("No recorded operation recovery journals");
+            const bool want_retention = command == "ck.files.restore_retained_target" ||
+                                        command == "ck.files.dispose_retained_target";
+            const bool found = std::any_of(operation_recovery_scan->journals.begin(),
+                                           operation_recovery_scan->journals.end(),
+                                           [&](const FilesOperationRecoveryItem &item) {
+                                               return item.native_name.has_value() && item.report.has_value() &&
+                                                      (item.kind == FilesOperationJournalKind::RetainedTarget) == want_retention;
+                                           });
+            if (!found)
+                return unavailable(want_retention ? "No retained target versions available"
+                                                  : "No unfinished transfer journals available");
             return FilesCommandAvailability::available();
         }
         if (command == "ck.files.copy" || command == "ck.files.move") {
@@ -1534,7 +1710,8 @@ struct FilesApp::State {
     }
     static bool pending(const Pane &p) {
         return p.navigating || p.reading || p.changing || p.queued_view || p.queued_refresh ||
-               p.queued_copy.has_value() || p.inspection || p.mutating;
+               p.queued_copy.has_value() || !p.queued_marks.empty() ||
+               !p.batch_delete_names.empty() || p.inspection || p.mutating;
     }
     bool volume_pending(std::size_t i) const {
         return volume_request && volume_request->pane == i && !volume_request->retired &&
@@ -1859,7 +2036,25 @@ struct FilesApp::State {
         auto *const raw_owner = owner.get();
         const auto close = [raw_owner] { raw_owner->close(); };
         owner->cancel_request = close;
-        if (operation_recovery_service) {
+        if (operation_recovery_service && operation_journal_root) {
+            if (availability("ck.files.resume_operation_recovery").enabled) {
+                auto resume_btn = std::make_unique<Button>("&Resume recorded job");
+                resume_btn->on_press = [this, close, weak = std::weak_ptr<void>(lifetime)] {
+                    close();
+                    if (!weak.expired())
+                        execute_first_recovery_action(FilesOperationRecoveryActionKind::ResumeRecordedJob);
+                };
+                buttons->add_item(std::move(resume_btn));
+            }
+            if (availability("ck.files.retry_operation_recovery").enabled) {
+                auto retry_btn = std::make_unique<Button>("Re&try unresolved items");
+                retry_btn->on_press = [this, close, weak = std::weak_ptr<void>(lifetime)] {
+                    close();
+                    if (!weak.expired())
+                        execute_first_recovery_action(FilesOperationRecoveryActionKind::RetryUnresolvedItems);
+                };
+                buttons->add_item(std::move(retry_btn));
+            }
             auto inspect = std::make_unique<Button>("&Inspect operation recovery");
             inspect->on_press = [this, close, weak = std::weak_ptr<void>(lifetime)] {
                 close();
@@ -1946,12 +2141,80 @@ struct FilesApp::State {
         volume_archive_recovery_cleanup_error = availability("ck.files.cleanup_archive_recovery").reason;
         labels();
     }
+    std::vector<ck::files::NativeAbsolutePath> candidate_pane_directories() const {
+        std::vector<ck::files::NativeAbsolutePath> dirs;
+        for (std::size_t i = 0; i < 2; ++i) {
+            if (!panes[i].active)
+                continue;
+            auto path = panes[i].active->root_address();
+            bool ok = true;
+            for (const auto &component : panes[i].active->components()) {
+                auto child = path.child_address(component);
+                if (!child.value()) { ok = false; break; }
+                path = std::move(child).take_value();
+            }
+            if (ok && path.is_valid())
+                dirs.push_back(std::move(path));
+        }
+        return dirs;
+    }
+    bool execute_recovery_action(std::size_t journal_index, FilesOperationRecoveryActionKind kind) {
+        if (!operation_recovery_service || !operation_journal_root || !operation_recovery_scan ||
+            operation_recovery_request || operation_recovery_action_pending)
+            return false;
+        if (journal_index >= operation_recovery_scan->journals.size())
+            return false;
+        const auto &item = operation_recovery_scan->journals[journal_index];
+        if (!item.native_name || !item.report)
+            return false;
+        const bool want_retention = kind == FilesOperationRecoveryActionKind::RestoreRetainedTarget ||
+                                    kind == FilesOperationRecoveryActionKind::DisposeRetainedTarget;
+        if ((item.kind == FilesOperationJournalKind::RetainedTarget) != want_retention) {
+            operation_recovery_action_status = want_retention
+                ? "Selected journal is a transfer; use Resume or Retry"
+                : "Selected journal is a retained target; use Restore or Dispose";
+            labels();
+            return false;
+        }
+        FilesOperationRecoveryActionRequest req{
+            kind,
+            *operation_journal_root,
+            *item.native_name,
+            item.report->journal_id,
+            candidate_pane_directories(),
+            {}};
+        const auto submitted = operation_recovery_service->request_action(std::move(req));
+        if (submitted != FilesOperationRecoverySubmission::Accepted) {
+            operation_recovery_action_status = "Operation recovery action rejected";
+            labels();
+            return false;
+        }
+        operation_recovery_action_pending = true;
+        operation_recovery_action_status = "Executing recovery action...";
+        watch();
+        labels();
+        return true;
+    }
+    bool execute_first_recovery_action(FilesOperationRecoveryActionKind kind) {
+        if (!operation_recovery_scan)
+            return false;
+        const bool want_retention = kind == FilesOperationRecoveryActionKind::RestoreRetainedTarget ||
+                                    kind == FilesOperationRecoveryActionKind::DisposeRetainedTarget;
+        for (std::size_t i = 0; i < operation_recovery_scan->journals.size(); ++i) {
+            const auto &item = operation_recovery_scan->journals[i];
+            if (item.native_name && item.report &&
+                (item.kind == FilesOperationJournalKind::RetainedTarget) == want_retention)
+                return execute_recovery_action(i, kind);
+        }
+        return false;
+    }
     void show_operation_recovery() {
         if (!availability("ck.files.inspect_operation_recovery").enabled ||
             !operation_recovery_scan || modal_pending())
             return;
+        using namespace ckv::widgets;
         std::ostringstream summary;
-        summary << "Read-only inspection\n\n";
+        summary << "Read-only inspection\n";
         if (operation_recovery_scan->reconciliation_error) {
             summary << "Reconciliation catalog: review required ("
                     << operation_recovery_scan->reconciliation_error->error.operation << ")\n\n";
@@ -2020,22 +2283,77 @@ struct FilesApp::State {
         if (journals.size() > count)
             summary << "Additional journal entries omitted from this bounded view: "
                     << (journals.size() - count) << '\n';
-        ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Operation recovery review";
-        descriptor.resizable = true;
-        std::istringstream lines(summary.str());
-        for (std::string line; std::getline(lines, line);)
-            descriptor.fields.push_back({.label = std::move(line), .kind = ckv::widgets::FieldKind::Note});
-        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
-        operation_recovery_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
-        operation_recovery_window = shell->desktop().active_window();
-        operation_recovery_lifetime = operation_recovery_window->lifetime_token();
-        operation_recovery_dialog->set_completion_handler([this](const ckv::widgets::DialogResult &) {
-            operation_recovery_window = nullptr;
-            operation_recovery_dialog.reset();
+
+        auto model = std::make_shared<OperationRecoveryList>(
+            std::make_shared<const FilesOperationRecoveryScan>(*operation_recovery_scan));
+        auto owner = std::make_unique<Window>("Operation recovery review");
+        auto &desktop = shell->desktop();
+        const auto &roles = shell->roles();
+        const auto area = desktop.content_area();
+        const int width = std::min(96, area.width), height = std::min(24, area.height);
+        owner->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height});
+        owner->set_min_size({36, 10});
+        owner->set_resizable(true);
+        owner->set_content_margin(1, 1);
+        owner->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame, roles.dialog_background);
+        auto content = std::make_unique<ckv::ui::Column>();
+        auto reader = std::make_unique<TextView>();
+        reader->set_wrap_mode(WrapMode::Character);
+        reader->set_text(summary.str());
+        content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding, .weight = 5});
+        auto list = std::make_unique<ListView>();
+        auto *const selection = list.get();
+        list->set_model(*model);
+        list->on_activate = [this, model](std::size_t index) {
+            if (index < model->item_count())
+                present_files_read_only_text("Operation recovery details", model->details(index),
+                    application, shell->desktop(), shell->roles());
+        };
+        content->add_item(std::move(list), {.policy = ckv::ui::SizePolicy::Expanding, .weight = 1});
+        auto buttons = std::make_unique<ckv::ui::Row>();
+        buttons->set_spacing(1);
+        auto *const raw_owner = owner.get();
+        const auto close = [raw_owner] { raw_owner->close(); };
+        owner->cancel_request = close;
+        const auto invoke = [this, selection, close, weak = std::weak_ptr<void>(lifetime)](
+                                FilesOperationRecoveryActionKind kind) {
+            const auto idx = selection->cursor();
+            if (idx < 0)
+                return;
+            close();
+            if (!weak.expired())
+                execute_recovery_action(static_cast<std::size_t>(idx), kind);
+        };
+        auto resume_btn = std::make_unique<Button>("&Resume");
+        resume_btn->on_press = [invoke] { invoke(FilesOperationRecoveryActionKind::ResumeRecordedJob); };
+        buttons->add_item(std::move(resume_btn));
+        auto retry_btn = std::make_unique<Button>("Re&try");
+        retry_btn->on_press = [invoke] { invoke(FilesOperationRecoveryActionKind::RetryUnresolvedItems); };
+        buttons->add_item(std::move(retry_btn));
+        auto restore_btn = std::make_unique<Button>("Re&store");
+        restore_btn->on_press = [invoke] { invoke(FilesOperationRecoveryActionKind::RestoreRetainedTarget); };
+        buttons->add_item(std::move(restore_btn));
+        auto dispose_btn = std::make_unique<Button>("&Dispose");
+        dispose_btn->on_press = [invoke] { invoke(FilesOperationRecoveryActionKind::DisposeRetainedTarget); };
+        buttons->add_item(std::move(dispose_btn));
+        auto dismiss = std::make_unique<Button>("&Close");
+        dismiss->on_press = close;
+        buttons->add_item(std::move(dismiss));
+        content->add_item(std::move(buttons));
+        owner->set_content(std::move(content));
+        operation_recovery_window = desktop.present_modal(WindowHandle{std::move(owner), selection}, application);
+        if (operation_recovery_window) {
+            operation_recovery_lifetime = operation_recovery_window->lifetime_token();
+            operation_recovery_window->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+                if (!weak.expired()) {
+                    operation_recovery_window = nullptr;
+                    if (!modal_pending() && surfaces[active] && surfaces[active]->grid)
+                        application.set_focus(surfaces[active]->grid);
+                    labels();
+                }
+            };
             labels();
-        });
+        }
     }
     void show_operation_recovery_cleanup() {
         // Recovered facts cannot authorize deletion of a staging object.
@@ -2121,6 +2439,8 @@ struct FilesApp::State {
         std::string activity;
         if (volume_archive_execution_request)
             activity = "Archiving volume";
+        else if (operation_recovery_action_pending)
+            activity = "Recovering operation";
         else if (operation_planning_request)
             activity = operation_planning_cancelling ? "Cancelling plan" : "Planning operation";
         else if (operation_execution_request)
@@ -2134,6 +2454,8 @@ struct FilesApp::State {
             activity = "Dialog open";
         else if (pending(panes[0]) || pending(panes[1]))
             activity = "Scanning";
+        else if (!operation_recovery_action_status.empty())
+            activity = operation_recovery_action_status;
         else
             activity = "Ready";
         window->set_footer("Active: " + std::string(active == 0 ? "Left" : "Right") +
@@ -2342,6 +2664,11 @@ struct FilesApp::State {
         p.homing = home;
         p.reading = false;
         p.changing.reset();
+        p.queued_marks.clear();
+        if (!refreshing) {
+            p.batch_delete_kind = Pane::BatchDeleteKind::None;
+            p.batch_delete_names.clear();
+        }
         p.queued_view.reset();
         p.queued_refresh = false;
         p.queued_copy.reset();
@@ -2503,11 +2830,6 @@ struct FilesApp::State {
         if (!ready(i))
             return false;
         auto &p = panes[i];
-        if (p.model.cursor_kind() == ck::files::ObjectKind::Directory) {
-            p.error = "Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified";
-            labels();
-            return false;
-        }
         const auto range = p.model.viewport();
         const auto submitted = services[i]->trash(p.navigation, target.stamp, target.row,
                                                    {range.first, range.rows});
@@ -2528,18 +2850,70 @@ struct FilesApp::State {
         labels();
         return true;
     }
-    bool permanently_delete(std::size_t i, FilesPaneRowTarget target) {
+    bool drain_batch_delete(std::size_t i) {
+        auto &p = panes[i];
+        if (p.batch_delete_kind == Pane::BatchDeleteKind::None || p.batch_delete_names.empty())
+            return false;
+        auto remaining = std::move(p.batch_delete_names);
+        p.batch_delete_names.clear();
+        if (!ready(i)) {
+            p.batch_delete_names = std::move(remaining);
+            return false;
+        }
+        const auto *rows = p.model.visible_rows();
+        if (!rows) {
+            p.batch_delete_kind = Pane::BatchDeleteKind::None;
+            return false;
+        }
+        while (!remaining.empty()) {
+            const auto expected_name = std::move(remaining.front());
+            remaining.erase(remaining.begin());
+            for (const auto &row : *rows) {
+                if (row.marked && row.display_name == expected_name) {
+                    const FilesPaneRowTarget target{p.stamp, row.id};
+                    std::optional<ck::files::ObjectKind> row_kind;
+                    if (row.metadata.kind.value())
+                        row_kind = *row.metadata.kind.value();
+                    const bool ok = p.batch_delete_kind == Pane::BatchDeleteKind::Trash
+                        ? trash(i, target)
+                        : permanently_delete(i, target, row_kind);
+                    if (ok) {
+                        p.batch_delete_names = std::move(remaining);
+                    } else {
+                        p.batch_delete_kind = Pane::BatchDeleteKind::None;
+                    }
+                    return ok;
+                }
+            }
+        }
+        p.batch_delete_kind = Pane::BatchDeleteKind::None;
+        return false;
+    }
+    bool start_batch_delete(std::size_t i, Pane::BatchDeleteKind kind) {
         if (!ready(i))
             return false;
         auto &p = panes[i];
-#if !defined(_WIN32)
-        if (p.model.cursor_kind() == ck::files::ObjectKind::Directory) {
-            p.error = "Permanent deletion unavailable: recursive identity-bound retirement is not qualified on this platform";
-            labels();
+        const auto *rows = p.model.visible_rows();
+        if (!rows)
             return false;
+        std::vector<std::string> names;
+        for (const auto &row : *rows) {
+            if (row.marked)
+                names.push_back(row.display_name);
         }
-#else
-        if (p.model.cursor_kind() == ck::files::ObjectKind::Directory) {
+        if (names.empty())
+            return false;
+        p.batch_delete_kind = kind;
+        p.batch_delete_names = std::move(names);
+        return drain_batch_delete(i);
+    }
+    bool permanently_delete(std::size_t i, FilesPaneRowTarget target,
+                            std::optional<ck::files::ObjectKind> target_kind = std::nullopt) {
+        if (!ready(i))
+            return false;
+        auto &p = panes[i];
+        const auto effective_kind = target_kind.has_value() ? target_kind : p.model.cursor_kind();
+        if (effective_kind == ck::files::ObjectKind::Directory) {
             if (!execution_service || !operation_journal_root || operation_execution_request) {
                 p.error = "Permanent deletion unavailable: the recursive deletion worker is not configured";
                 labels();
@@ -2567,7 +2941,6 @@ struct FilesApp::State {
             labels();
             return true;
         }
-#endif
         const auto range = p.model.viewport();
         const auto submitted = services[i]->permanently_delete(p.navigation, target.stamp, target.row,
                                                                {range.first, range.rows});
@@ -2649,6 +3022,132 @@ struct FilesApp::State {
         p.model.set_input_locked(true);
         watch();
         return true;
+    }
+    bool swap_panes() {
+        if (!availability("ck.files.swap_panes").enabled)
+            return false;
+        auto loc0 = *panes[0].active;
+        auto loc1 = *panes[1].active;
+        auto view0 = panes[0].view;
+        auto view1 = panes[1].view;
+        const bool ok0 = navigate(0, std::move(loc1), std::move(view1));
+        const bool ok1 = navigate(1, std::move(loc0), std::move(view0));
+        return ok0 && ok1;
+    }
+    bool sync_other_pane() {
+        if (!availability("ck.files.sync_other_pane").enabled)
+            return false;
+        const std::size_t other = 1 - active;
+        auto loc = *panes[active].active;
+        auto view = panes[other].view;
+        return navigate(other, std::move(loc), std::move(view));
+    }
+    bool drain_queued_marks(std::size_t i) {
+        auto &p = panes[i];
+        if (p.queued_marks.empty() || p.changing || p.navigating || p.mutating || p.reading)
+            return false;
+        auto remaining = std::move(p.queued_marks);
+        p.queued_marks.clear();
+        auto next = std::move(remaining.front());
+        remaining.erase(remaining.begin());
+        if (!begin_change(i, FilesPaneChangeMarks{std::move(next)}, true)) {
+            return false;
+        }
+        p.queued_marks = std::move(remaining);
+        return true;
+    }
+    bool mark_pattern(std::size_t i, std::string pattern, bool marked) {
+        if (i >= 2 || !ready(i) || panes[i].volume_view || pattern.empty())
+            return false;
+        const auto *rows = panes[i].model.visible_rows();
+        if (!rows)
+            return false;
+        std::vector<ck::files::IndexedMarkCommand> cmds;
+        for (const auto &row : *rows) {
+            if (row.marked != marked && glob_match(pattern, row.display_name))
+                cmds.push_back(ck::files::IndexedMarkRow{row.id, marked});
+        }
+        if (cmds.empty())
+            return true;
+        panes[i].queued_marks = std::move(cmds);
+        return drain_queued_marks(i);
+    }
+    void show_mark_pattern(bool marked) {
+        if (!availability(marked ? "ck.files.mark_pattern" : "ck.files.unmark_pattern").enabled || modal_pending())
+            return;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = marked ? "Mark files by pattern" : "Unmark files by pattern";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "&Pattern (e.g. *.txt, test_?):"}};
+        descriptor.buttons = {
+            {marked ? "&Mark" : "&Unmark", ckv::widgets::ButtonRole::Accept, {}},
+            {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        const std::size_t pane_idx = active;
+        mark_pattern_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
+        mark_pattern_dialog->set_completion_handler([this, pane_idx, marked](const ckv::widgets::DialogResult &res) {
+            std::string pat;
+            if (res.accepted && !res.values.empty())
+                pat = res.values[0];
+            mark_pattern_dialog.reset();
+            if (res.accepted && !pat.empty())
+                mark_pattern(pane_idx, std::move(pat), marked);
+            labels();
+        });
+    }
+    bool compare_directories() {
+        if (!availability("ck.files.compare_directories").enabled)
+            return false;
+        const std::size_t other = 1 - active;
+        const auto *src_rows = panes[active].model.visible_rows();
+        const auto *dst_rows = panes[other].model.visible_rows();
+        if (!src_rows || !dst_rows)
+            return false;
+        using ModTime = std::decay_t<decltype(*src_rows->front().metadata.modified.value())>;
+        struct EntrySig {
+            std::optional<ck::files::ObjectKind> kind;
+            std::optional<std::uint64_t> size;
+            std::optional<ModTime> modified;
+        };
+        std::map<std::string_view, EntrySig> other_entries;
+        for (const auto &row : *dst_rows) {
+            EntrySig sig;
+            if (row.metadata.kind.value()) sig.kind = *row.metadata.kind.value();
+            if (row.metadata.logical_size.value()) sig.size = *row.metadata.logical_size.value();
+            if (row.metadata.modified.value()) sig.modified = *row.metadata.modified.value();
+            other_entries.emplace(row.display_name, sig);
+        }
+        std::vector<ck::files::IndexedMarkCommand> cmds;
+        for (const auto &row : *src_rows) {
+            bool should_mark = false;
+            const auto it = other_entries.find(row.display_name);
+            std::optional<ck::files::ObjectKind> row_kind;
+            if (row.metadata.kind.value()) row_kind = *row.metadata.kind.value();
+            std::optional<std::uint64_t> row_size;
+            if (row.metadata.logical_size.value()) row_size = *row.metadata.logical_size.value();
+            std::optional<ModTime> row_mod;
+            if (row.metadata.modified.value()) row_mod = *row.metadata.modified.value();
+            if (it == other_entries.end()) {
+                should_mark = true;
+            } else if (it->second.kind != row_kind) {
+                should_mark = true;
+            } else if (row_kind == ck::files::ObjectKind::RegularFile) {
+                if (row_size != it->second.size)
+                    should_mark = true;
+                else if (row_mod && it->second.modified &&
+                         (row_mod->seconds() > it->second.modified->seconds() ||
+                          (row_mod->seconds() == it->second.modified->seconds() &&
+                           row_mod->nanoseconds() > it->second.modified->nanoseconds())))
+                    should_mark = true;
+            }
+            if (row.marked != should_mark)
+                cmds.push_back(ck::files::IndexedMarkRow{row.id, should_mark});
+        }
+        if (cmds.empty())
+            return true;
+        panes[active].queued_marks = std::move(cmds);
+        return drain_queued_marks(active);
     }
     bool change_view(std::size_t i, ck::files::PaneView view) {
         if (!ready(i) || !ck::files::valid_pane_order({view.sort, view.descending, view.folders_first}) ||
@@ -3088,12 +3587,15 @@ struct FilesApp::State {
             return;
         const auto pane = active;
         const auto navigation = panes[pane].navigation;
+        const std::size_t marked = panes[pane].selection.marks ? panes[pane].selection.marks->total : std::size_t{0};
         const auto target = panes[pane].model.target();
-        if (!target)
+        if (marked == 0 && !target)
             return;
-        const auto row = target->row;
+        const auto row = target ? target->row : ck::files::PaneRowId{};
         ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Move entry to Trash / Recycle Bin";
+        descriptor.title = marked > 0
+            ? "Move " + std::to_string(marked) + " marked entries to Trash / Recycle Bin"
+            : "Move entry to Trash / Recycle Bin";
         descriptor.fields = {
             ckv::widgets::FieldDescriptor{
                 .label = "The platform Trash / Recycle Bin will receive the selected entry when supported. No permanent-delete fallback is used.",
@@ -3107,13 +3609,27 @@ struct FilesApp::State {
         trash_window = shell->desktop().active_window();
         trash_lifetime = trash_window->lifetime_token();
         trash_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row](
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row, marked](
                 const ckv::widgets::DialogResult &result) {
                 if (weak.expired())
                     return;
                 trash_window = nullptr;
                 if (!result.accepted) {
                     trash_dialog.reset();
+                    return;
+                }
+                if (marked > 0) {
+                    if (panes[pane].navigation != navigation) {
+                        panes[pane].error = "Folder changed while Trash / Recycle Bin was open";
+                        trash_dialog.reset();
+                        labels();
+                        return;
+                    }
+                    trash_dialog.reset();
+                    if (!start_batch_delete(pane, Pane::BatchDeleteKind::Trash)) {
+                        panes[pane].error = "Batch Trash / Recycle Bin request was rejected";
+                        labels();
+                    }
                     return;
                 }
                 const auto current = panes[pane].model.target();
@@ -3135,12 +3651,15 @@ struct FilesApp::State {
             return;
         const auto pane = active;
         const auto navigation = panes[pane].navigation;
+        const std::size_t marked = panes[pane].selection.marks ? panes[pane].selection.marks->total : std::size_t{0};
         const auto target = panes[pane].model.target();
-        if (!target)
+        if (marked == 0 && !target)
             return;
-        const auto row = target->row;
+        const auto row = target ? target->row : ck::files::PaneRowId{};
         ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Delete entry permanently";
+        descriptor.title = marked > 0
+            ? "Delete " + std::to_string(marked) + " marked entries permanently"
+            : "Delete entry permanently";
         descriptor.fields = {
             ckv::widgets::FieldDescriptor{
                 .label = "This is irreversible. The selected entry will be permanently deleted; it will not be moved to Trash or the Recycle Bin.",
@@ -3154,13 +3673,27 @@ struct FilesApp::State {
         delete_window = shell->desktop().active_window();
         delete_lifetime = delete_window->lifetime_token();
         delete_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row](
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row, marked](
                 const ckv::widgets::DialogResult &result) {
                 if (weak.expired())
                     return;
                 delete_window = nullptr;
                 if (!result.accepted) {
                     delete_dialog.reset();
+                    return;
+                }
+                if (marked > 0) {
+                    if (panes[pane].navigation != navigation) {
+                        panes[pane].error = "Folder changed while permanent deletion was open";
+                        delete_dialog.reset();
+                        labels();
+                        return;
+                    }
+                    delete_dialog.reset();
+                    if (!start_batch_delete(pane, Pane::BatchDeleteKind::PermanentDelete)) {
+                        panes[pane].error = "Batch permanent deletion request was rejected";
+                        labels();
+                    }
                     return;
                 }
                 const auto current = panes[pane].model.target();
@@ -3643,7 +4176,13 @@ struct FilesApp::State {
                 // A confirmed mutation makes the old listing stale until a
                 // worker publishes a verified refresh of the held directory.
                 p.refresh_failed = true;
-                if (!refresh(i))
+                auto saved_batch = std::move(p.batch_delete_names);
+                p.batch_delete_names.clear();
+                const bool refresh_started = refresh(i);
+                p.batch_delete_names = std::move(saved_batch);
+                if (!refresh_started) {
+                    p.batch_delete_kind = Pane::BatchDeleteKind::None;
+                    p.batch_delete_names.clear();
                     p.error = was_delete ? "Entry permanently deleted; refresh could not be started"
                                          : was_trash ? "Entry moved to Trash / Recycle Bin; refresh could not be started"
                                          : was_rename ? "Entry renamed; refresh could not be started"
@@ -3651,7 +4190,10 @@ struct FilesApp::State {
                                                                          : was_create_hard_link ? "Hard link created; refresh could not be started"
                                                                                                 : was_create_symbolic_link ? "Symbolic link created; refresh could not be started"
                                                                                                 : "Directory created; refresh could not be started";
+                }
             } else {
+                p.batch_delete_kind = Pane::BatchDeleteKind::None;
+                p.batch_delete_names.clear();
                 p.error = reply.state == FilesPaneReplyState::Ready
                               ? (was_delete ? "Permanent deletion outcome unavailable"
                                             : was_trash ? "Trash / Recycle Bin outcome unavailable"
@@ -3763,6 +4305,11 @@ struct FilesApp::State {
             } else if (queued_copy && i == active && reply.kind == FilesPaneReplyKind::Focus && !cancelled &&
                        reply.change_outcome == FilesPaneChangeOutcome::Applied) {
                 prepare_copy(*queued_copy);
+            } else if (reply.kind == FilesPaneReplyKind::Marks && !cancelled && !p.queued_marks.empty()) {
+                drain_queued_marks(i);
+            } else if (adopted && refreshing && !cancelled &&
+                       p.batch_delete_kind != Pane::BatchDeleteKind::None && !p.batch_delete_names.empty()) {
+                drain_batch_delete(i);
             }
             return;
         }
@@ -4468,8 +5015,26 @@ struct FilesApp::State {
                     }
                     labels();
                 }
-                if (operation_recovery_request && !operation_recovery_service->running()) {
+                if (auto action_reply = operation_recovery_service->take_action()) {
+                    operation_recovery_action_pending = false;
+                    if (action_reply->state == FilesOperationRecoveryState::Ready && action_reply->result) {
+                        operation_recovery_action_status = action_reply->result->summary;
+                        operation_recovery_error.clear();
+                        for (std::size_t pane_idx = 0; pane_idx < 2; ++pane_idx)
+                            if (ready(pane_idx) && !panes[pane_idx].volume_view)
+                                refresh(pane_idx);
+                        scan_operation_recovery();
+                    } else {
+                        operation_recovery_action_status = action_reply->error
+                            ? "Recovery action failed: " + action_reply->error->error.operation
+                            : "Recovery action failed";
+                    }
+                    labels();
+                }
+                if ((operation_recovery_request || operation_recovery_action_pending) &&
+                    !operation_recovery_service->running()) {
                     operation_recovery_request = false;
+                    operation_recovery_action_pending = false;
                     operation_recovery_dirty = false;
                     operation_recovery_error = "operation recovery worker stopped";
                     labels();
@@ -4894,16 +5459,29 @@ bool FilesApp::rename(std::size_t pane, ck::files::NativeName name) {
     return state_->rename(pane, *target, std::move(name));
 }
 bool FilesApp::trash(std::size_t pane) {
+    if (state_->panes.at(pane).selection.marks && state_->panes.at(pane).selection.marks->total > 0)
+        return state_->start_batch_delete(pane, State::Pane::BatchDeleteKind::Trash);
     const auto target = state_->panes.at(pane).model.target();
     if (!target)
         return false;
     return state_->trash(pane, *target);
 }
 bool FilesApp::permanently_delete(std::size_t pane) {
+    if (state_->panes.at(pane).selection.marks && state_->panes.at(pane).selection.marks->total > 0)
+        return state_->start_batch_delete(pane, State::Pane::BatchDeleteKind::PermanentDelete);
     const auto target = state_->panes.at(pane).model.target();
     if (!target)
         return false;
     return state_->permanently_delete(pane, *target);
+}
+bool FilesApp::swap_panes() { return state_->swap_panes(); }
+bool FilesApp::sync_other_pane() { return state_->sync_other_pane(); }
+bool FilesApp::mark_pattern(std::size_t pane, std::string pattern, bool marked) {
+    return state_->mark_pattern(pane, std::move(pattern), marked);
+}
+bool FilesApp::compare_directories() { return state_->compare_directories(); }
+bool FilesApp::execute_recovery_action(std::size_t journal_index, FilesOperationRecoveryActionKind kind) {
+    return state_->execute_recovery_action(journal_index, kind);
 }
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;
