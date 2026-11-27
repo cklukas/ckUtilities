@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -28,10 +28,13 @@
 <text x="171" y="14" xml:space="preserve" fill="#000000">perations</text>
 <text x="270" y="14" xml:space="preserve" fill="#aa0000">M</text>
 <text x="279" y="14" xml:space="preserve" fill="#000000">arks</text>
-<text x="333" y="14" xml:space="preserve" fill="#aa0000">V</text>
-<text x="342" y="14" xml:space="preserve" fill="#000000">iew</text>
-<text x="387" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="396" y="14" xml:space="preserve" fill="#000000">elp                                                                   08:00</text>
+<text x="333" y="14" xml:space="preserve" fill="#aa0000">T</text>
+<text x="342" y="14" xml:space="preserve" fill="#000000">ools</text>
+<text x="396" y="14" xml:space="preserve" fill="#aa0000">V</text>
+<text x="405" y="14" xml:space="preserve" fill="#000000">iew</text>
+<text x="450" y="14" xml:space="preserve" fill="#aa0000">H</text>
+<text x="459" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -487,11 +490,17 @@
 <path d="M 4.5 71.5 L 4.5 81 L 4.5 90.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 71.5 L 4.5 81 L 4.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="86" xml:space="preserve" fill="#0000aa">M             Name                Type       Bytes</text>
+<text x="9" y="86" xml:space="preserve" fill="#0000aa">M</text>
+<text x="135" y="86" xml:space="preserve" fill="#0000aa">Name</text>
+<text x="315" y="86" xml:space="preserve" fill="#0000aa">Type</text>
+<text x="414" y="86" xml:space="preserve" fill="#0000aa">Bytes</text>
 <g data-box-drawing="single">
 <path d="M 535.5 71.5 L 535.5 81 L 535.5 90.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="540" y="86" xml:space="preserve" fill="#0000aa">M             Name                 Type       Bytes</text>
+<text x="540" y="86" xml:space="preserve" fill="#0000aa">M</text>
+<text x="666" y="86" xml:space="preserve" fill="#0000aa">Name</text>
+<text x="855" y="86" xml:space="preserve" fill="#0000aa">Type</text>
+<text x="954" y="86" xml:space="preserve" fill="#0000aa">Bytes</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -500,12 +509,15 @@
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="104" xml:space="preserve" fill="#ffff55">Documents                   Folder           Unknown</text>
+<text x="27" y="104" xml:space="preserve" fill="#ffff55">Documents</text>
+<text x="279" y="104" xml:space="preserve" fill="#ffff55">Folder</text>
+<text x="432" y="104" xml:space="preserve" fill="#ffff55">Unknown</text>
 <g data-box-drawing="single">
 <path d="M 535.5 89.5 L 535.5 99 L 535.5 108.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="558" y="104" xml:space="preserve" fill="#000000">Archive</text>
-<text x="819" y="104" xml:space="preserve" fill="#ffff55">Folder           Unknown</text>
+<text x="819" y="104" xml:space="preserve" fill="#ffff55">Folder</text>
+<text x="972" y="104" xml:space="preserve" fill="#ffff55">Unknown</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -514,11 +526,15 @@
 <path d="M 4.5 107.5 L 4.5 117 L 4.5 126.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 107.5 L 4.5 117 L 4.5 126.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="122" xml:space="preserve" fill="#ffff55">Downloads                   Folder           Unknown</text>
+<text x="27" y="122" xml:space="preserve" fill="#ffff55">Downloads</text>
+<text x="279" y="122" xml:space="preserve" fill="#ffff55">Folder</text>
+<text x="432" y="122" xml:space="preserve" fill="#ffff55">Unknown</text>
 <g data-box-drawing="single">
 <path d="M 535.5 107.5 L 535.5 117 L 535.5 126.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="122" xml:space="preserve" fill="#ffff55">Incoming                     Folder           Unknown</text>
+<text x="558" y="122" xml:space="preserve" fill="#ffff55">Incoming</text>
+<text x="819" y="122" xml:space="preserve" fill="#ffff55">Folder</text>
+<text x="972" y="122" xml:space="preserve" fill="#ffff55">Unknown</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 107.5 L 1075.5 117 L 1075.5 126.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 107.5 L 1075.5 117 L 1075.5 126.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -528,11 +544,14 @@
 <path d="M 4.5 125.5 L 4.5 135 L 4.5 144.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="27" y="140" xml:space="preserve" fill="#ffffff">README.md</text>
-<text x="279" y="140" xml:space="preserve" fill="#ffff55">File                1842</text>
+<text x="279" y="140" xml:space="preserve" fill="#ffff55">File</text>
+<text x="459" y="140" xml:space="preserve" fill="#ffff55">1842</text>
 <g data-box-drawing="single">
 <path d="M 535.5 125.5 L 535.5 135 L 535.5 144.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="140" xml:space="preserve" fill="#ffff55">README.md                    File                1842</text>
+<text x="558" y="140" xml:space="preserve" fill="#ffff55">README.md</text>
+<text x="819" y="140" xml:space="preserve" fill="#ffff55">File</text>
+<text x="999" y="140" xml:space="preserve" fill="#ffff55">1842</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 125.5 L 1075.5 135 L 1075.5 144.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 125.5 L 1075.5 135 L 1075.5 144.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -541,11 +560,15 @@
 <path d="M 4.5 143.5 L 4.5 153 L 4.5 162.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 143.5 L 4.5 153 L 4.5 162.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="158" xml:space="preserve" fill="#ffff55">release-notes.json          File                3276</text>
+<text x="27" y="158" xml:space="preserve" fill="#ffff55">release-notes.json</text>
+<text x="279" y="158" xml:space="preserve" fill="#ffff55">File</text>
+<text x="459" y="158" xml:space="preserve" fill="#ffff55">3276</text>
 <g data-box-drawing="single">
 <path d="M 535.5 143.5 L 535.5 153 L 535.5 162.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="158" xml:space="preserve" fill="#ffff55">space-report.txt             File                 420</text>
+<text x="558" y="158" xml:space="preserve" fill="#ffff55">space-report.txt</text>
+<text x="819" y="158" xml:space="preserve" fill="#ffff55">File</text>
+<text x="1008" y="158" xml:space="preserve" fill="#ffff55">420</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 143.5 L 1075.5 153 L 1075.5 162.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 143.5 L 1075.5 153 L 1075.5 162.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -554,7 +577,9 @@
 <path d="M 4.5 161.5 L 4.5 171 L 4.5 180.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 161.5 L 4.5 171 L 4.5 180.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="176" xml:space="preserve" fill="#ffff55">report.csv                  File                9812</text>
+<text x="27" y="176" xml:space="preserve" fill="#ffff55">report.csv</text>
+<text x="279" y="176" xml:space="preserve" fill="#ffff55">File</text>
+<text x="459" y="176" xml:space="preserve" fill="#ffff55">9812</text>
 <g data-box-drawing="single">
 <path d="M 535.5 161.5 L 535.5 171 L 535.5 180.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>

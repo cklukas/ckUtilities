@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -19,7 +19,8 @@
 <text x="198" y="14" xml:space="preserve" fill="#aa0000">V</text>
 <text x="207" y="14" xml:space="preserve" fill="#000000">iew</text>
 <text x="252" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="261" y="14" xml:space="preserve" fill="#000000">elp                                                                                  08:00</text>
+<text x="261" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -17,7 +17,8 @@
 <text x="198" y="14" xml:space="preserve" fill="#aa0000">F</text>
 <text x="207" y="14" xml:space="preserve" fill="#000000">ormat</text>
 <text x="270" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="279" y="14" xml:space="preserve" fill="#000000">elp                                                                                08:00</text>
+<text x="279" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -1167,7 +1168,8 @@
 <text x="9" y="608" xml:space="preserve" fill="#aa0000">Ctrl+O</text>
 <text x="72" y="608" xml:space="preserve" fill="#000000">Open</text>
 <text x="126" y="608" xml:space="preserve" fill="#aa0000">Ctrl+S</text>
-<text x="189" y="608" xml:space="preserve" fill="#000000">Save  Normalize</text>
+<text x="189" y="608" xml:space="preserve" fill="#000000">Save</text>
+<text x="243" y="608" xml:space="preserve" fill="#000000">Normalize</text>
 <text x="342" y="608" xml:space="preserve" fill="#aa0000">Ctrl+B</text>
 <text x="405" y="608" xml:space="preserve" fill="#000000">Bold</text>
 <text x="459" y="608" xml:space="preserve" fill="#aa0000">F1</text>

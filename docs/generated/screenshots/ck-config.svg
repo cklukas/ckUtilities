@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -18,7 +18,8 @@
 <text x="72" y="14" xml:space="preserve" fill="#aa0000">O</text>
 <text x="81" y="14" xml:space="preserve" fill="#000000">ptions</text>
 <text x="153" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="162" y="14" xml:space="preserve" fill="#000000">elp                                                                                             08:00</text>
+<text x="162" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -392,7 +393,10 @@
 <path d="M 4.5 35.5 L 4.5 45 L 4.5 54.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 35.5 L 4.5 45 L 4.5 54.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Name                      Key                       Type         Value</text>
+<text x="9" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Name</text>
+<text x="243" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Key</text>
+<text x="477" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Type</text>
+<text x="594" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Value</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 35.5 L 1075.5 45 L 1075.5 54.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 35.5 L 1075.5 45 L 1075.5 54.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -401,7 +405,10 @@
 <path d="M 4.5 53.5 L 4.5 63 L 4.5 72.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 53.5 L 4.5 63 L 4.5 72.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="68" xml:space="preserve" fill="#000000">Active Model ID           activeModelId             Text         guide-assistant</text>
+<text x="9" y="68" xml:space="preserve" fill="#000000">Active Model ID</text>
+<text x="243" y="68" xml:space="preserve" fill="#000000">activeModelId</text>
+<text x="477" y="68" xml:space="preserve" fill="#000000">Text</text>
+<text x="594" y="68" xml:space="preserve" fill="#000000">guide-assistant</text>
 <text x="1062" y="68" xml:space="preserve" fill="#55ffff">▲</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 53.5 L 1075.5 63 L 1075.5 72.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -411,7 +418,10 @@
 <path d="M 4.5 71.5 L 4.5 81 L 4.5 90.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 71.5 L 4.5 81 L 4.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="86" xml:space="preserve" fill="#000000">Active Prompt ID          activePromptId            Text         guide</text>
+<text x="9" y="86" xml:space="preserve" fill="#000000">Active Prompt ID</text>
+<text x="243" y="86" xml:space="preserve" fill="#000000">activePromptId</text>
+<text x="477" y="86" xml:space="preserve" fill="#000000">Text</text>
+<text x="594" y="86" xml:space="preserve" fill="#000000">guide</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -420,7 +430,10 @@
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="104" xml:space="preserve" fill="#000000">Parse Markdown Links      parseMarkdownLinks        Boolean      true</text>
+<text x="9" y="104" xml:space="preserve" fill="#000000">Parse Markdown Links</text>
+<text x="243" y="104" xml:space="preserve" fill="#000000">parseMarkdownLinks</text>
+<text x="477" y="104" xml:space="preserve" fill="#000000">Boolean</text>
+<text x="594" y="104" xml:space="preserve" fill="#000000">true</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -429,7 +442,10 @@
 <path d="M 4.5 107.5 L 4.5 117 L 4.5 126.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 107.5 L 4.5 117 L 4.5 126.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="122" xml:space="preserve" fill="#000000">Show Analysis             showAnalysis              Boolean      false</text>
+<text x="9" y="122" xml:space="preserve" fill="#000000">Show Analysis</text>
+<text x="243" y="122" xml:space="preserve" fill="#000000">showAnalysis</text>
+<text x="477" y="122" xml:space="preserve" fill="#000000">Boolean</text>
+<text x="594" y="122" xml:space="preserve" fill="#000000">false</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 107.5 L 1075.5 117 L 1075.5 126.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 107.5 L 1075.5 117 L 1075.5 126.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -438,7 +454,10 @@
 <path d="M 4.5 125.5 L 4.5 135 L 4.5 144.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 125.5 L 4.5 135 L 4.5 144.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="140" xml:space="preserve" fill="#000000">Show Thinking             showThinking              Boolean      false</text>
+<text x="9" y="140" xml:space="preserve" fill="#000000">Show Thinking</text>
+<text x="243" y="140" xml:space="preserve" fill="#000000">showThinking</text>
+<text x="477" y="140" xml:space="preserve" fill="#000000">Boolean</text>
+<text x="594" y="140" xml:space="preserve" fill="#000000">false</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 125.5 L 1075.5 135 L 1075.5 144.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 125.5 L 1075.5 135 L 1075.5 144.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -989,11 +1008,16 @@
 </g>
 <text x="9" y="608" xml:space="preserve" fill="#000000">Application</text>
 <text x="126" y="608" xml:space="preserve" fill="#aa0000">Enter</text>
-<text x="180" y="608" xml:space="preserve" fill="#000000">Edit  Reset</text>
+<text x="180" y="608" xml:space="preserve" fill="#000000">Edit</text>
+<text x="234" y="608" xml:space="preserve" fill="#000000">Reset</text>
 <text x="297" y="608" xml:space="preserve" fill="#aa0000">Ctrl+S</text>
 <text x="360" y="608" xml:space="preserve" fill="#000000">Save</text>
 <text x="414" y="608" xml:space="preserve" fill="#aa0000">Ctrl+R</text>
-<text x="477" y="608" xml:space="preserve" fill="#000000">Reload  Import  Export  Shortcuts  Scheme</text>
+<text x="477" y="608" xml:space="preserve" fill="#000000">Reload</text>
+<text x="549" y="608" xml:space="preserve" fill="#000000">Import</text>
+<text x="621" y="608" xml:space="preserve" fill="#000000">Export</text>
+<text x="693" y="608" xml:space="preserve" fill="#000000">Shortcuts</text>
+<text x="792" y="608" xml:space="preserve" fill="#000000">Scheme</text>
 <text x="864" y="608" xml:space="preserve" fill="#aa0000">F1</text>
 <text x="891" y="608" xml:space="preserve" fill="#000000">Help</text>
 <text x="945" y="608" xml:space="preserve" fill="#aa0000">F10</text>

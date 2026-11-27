@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -38,10 +38,13 @@
 <text x="171" y="14" xml:space="preserve" fill="#000000">perations</text>
 <text x="270" y="14" xml:space="preserve" fill="#aa0000">M</text>
 <text x="279" y="14" xml:space="preserve" fill="#000000">arks</text>
-<text x="333" y="14" xml:space="preserve" fill="#aa0000">V</text>
-<text x="342" y="14" xml:space="preserve" fill="#000000">iew</text>
-<text x="387" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="396" y="14" xml:space="preserve" fill="#000000">elp                                                                   08:00</text>
+<text x="333" y="14" xml:space="preserve" fill="#aa0000">T</text>
+<text x="342" y="14" xml:space="preserve" fill="#000000">ools</text>
+<text x="396" y="14" xml:space="preserve" fill="#aa0000">V</text>
+<text x="405" y="14" xml:space="preserve" fill="#000000">iew</text>
+<text x="450" y="14" xml:space="preserve" fill="#aa0000">H</text>
+<text x="459" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="single">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -382,11 +385,16 @@
 <g data-box-drawing="single">
 <path d="M 4.5 71.5 L 4.5 81 L 4.5 90.5" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="108" y="86" xml:space="preserve" fill="#0000aa">Mount                Type           Space</text>
+<text x="108" y="86" xml:space="preserve" fill="#0000aa">Mount</text>
+<text x="297" y="86" xml:space="preserve" fill="#0000aa">Type</text>
+<text x="432" y="86" xml:space="preserve" fill="#0000aa">Space</text>
 <g data-box-drawing="single">
 <path d="M 535.5 71.5 L 535.5 81 L 535.5 90.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="540" y="86" xml:space="preserve" fill="#0000aa">M             Name                 Type       Bytes</text>
+<text x="540" y="86" xml:space="preserve" fill="#0000aa">M</text>
+<text x="666" y="86" xml:space="preserve" fill="#0000aa">Name</text>
+<text x="855" y="86" xml:space="preserve" fill="#0000aa">Type</text>
+<text x="954" y="86" xml:space="preserve" fill="#0000aa">Bytes</text>
 <g data-box-drawing="single">
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -394,12 +402,14 @@
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="9" y="104" xml:space="preserve" fill="#000000">/capture</text>
-<text x="261" y="104" xml:space="preserve" fill="#ffff55">simulatedfs        12.0G/20.0G</text>
+<text x="261" y="104" xml:space="preserve" fill="#ffff55">simulatedfs</text>
+<text x="432" y="104" xml:space="preserve" fill="#ffff55">12.0G/20.0G</text>
 <g data-box-drawing="single">
 <path d="M 535.5 89.5 L 535.5 99 L 535.5 108.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="558" y="104" xml:space="preserve" fill="#000000">Archive</text>
-<text x="819" y="104" xml:space="preserve" fill="#ffff55">Folder           Unknown</text>
+<text x="819" y="104" xml:space="preserve" fill="#ffff55">Folder</text>
+<text x="972" y="104" xml:space="preserve" fill="#ffff55">Unknown</text>
 <g data-box-drawing="single">
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>

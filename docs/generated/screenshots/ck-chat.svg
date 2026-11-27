@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -18,7 +18,8 @@
 <text x="207" y="14" xml:space="preserve" fill="#aa0000">M</text>
 <text x="216" y="14" xml:space="preserve" fill="#000000">odels</text>
 <text x="279" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="288" y="14" xml:space="preserve" fill="#000000">elp                                                                               08:00</text>
+<text x="288" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -916,7 +917,9 @@
 <text x="9" y="608" xml:space="preserve" fill="#aa0000">Ctrl+Enter</text>
 <text x="108" y="608" xml:space="preserve" fill="#000000">Send</text>
 <text x="162" y="608" xml:space="preserve" fill="#aa0000">Ctrl+C</text>
-<text x="225" y="608" xml:space="preserve" fill="#000000">Cancel  Copy  Export</text>
+<text x="225" y="608" xml:space="preserve" fill="#000000">Cancel</text>
+<text x="297" y="608" xml:space="preserve" fill="#000000">Copy</text>
+<text x="351" y="608" xml:space="preserve" fill="#000000">Export</text>
 <text x="423" y="608" xml:space="preserve" fill="#aa0000">F1</text>
 <text x="450" y="608" xml:space="preserve" fill="#000000">Help</text>
 <text x="504" y="608" xml:space="preserve" fill="#aa0000">F10</text>

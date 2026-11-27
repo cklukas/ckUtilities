@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="612" viewBox="0 0 720 612">
 <rect x="0" y="0" width="720" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="720" height="18" fill="#c6c6c6"/>
 <rect x="0" y="18" width="720" height="576" fill="#eeeeee"/>
 <rect x="0" y="594" width="720" height="18" fill="#c6c6c6"/>
@@ -19,7 +19,9 @@
 <text x="72" y="14" xml:space="preserve" fill="#af0000">V</text>
 <text x="81" y="14" xml:space="preserve" fill="#000000">iew</text>
 <text x="126" y="14" xml:space="preserve" fill="#af0000">H</text>
-<text x="135" y="14" xml:space="preserve" fill="#000000">elp                   ck-sysmon / 2 hosts / 1 offline   18:40:12</text>
+<text x="135" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="333" y="14" xml:space="preserve" fill="#000000">ck-sysmon / 2 hosts / 1 offline</text>
+<text x="639" y="14" xml:space="preserve" fill="#000000">18:40:12</text>
 <g data-box-drawing="single">
 <path d="M 13.5 36.5 L 13.5 27 L 18.5 27" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -273,7 +275,8 @@
 <g data-box-drawing="single">
 <path d="M 13.5 107.5 L 13.5 117 L 13.5 126.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="122" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 0  NVIDIA GTX 1080 Ti</text>
+<text x="27" y="122" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 0</text>
+<text x="90" y="122" xml:space="preserve" fill="#005f5f" font-weight="bold">NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 706.5 107.5 L 706.5 117 L 706.5 126.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -291,7 +294,8 @@
 <g data-box-drawing="single">
 <path d="M 13.5 143.5 L 13.5 153 L 13.5 162.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="158" xml:space="preserve" fill="#5f5f5f">73.0 °C  187.0 W</text>
+<text x="81" y="158" xml:space="preserve" fill="#5f5f5f">73.0 °C</text>
+<text x="162" y="158" xml:space="preserve" fill="#5f5f5f">187.0 W</text>
 <g data-box-drawing="single">
 <path d="M 706.5 143.5 L 706.5 153 L 706.5 162.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -309,14 +313,16 @@
 <g data-box-drawing="single">
 <path d="M 13.5 179.5 L 13.5 189 L 13.5 198.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="194" xml:space="preserve" fill="#5f5f5f">6.0 / 11.0 GiB  +0.8 GiB shared RAM</text>
+<text x="81" y="194" xml:space="preserve" fill="#5f5f5f">6.0 / 11.0 GiB</text>
+<text x="225" y="194" xml:space="preserve" fill="#5f5f5f">+0.8 GiB shared RAM</text>
 <g data-box-drawing="single">
 <path d="M 706.5 179.5 L 706.5 189 L 706.5 198.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 197.5 L 13.5 207 L 13.5 216.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="212" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 1  NVIDIA GTX 1080 Ti</text>
+<text x="27" y="212" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 1</text>
+<text x="90" y="212" xml:space="preserve" fill="#005f5f" font-weight="bold">NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 706.5 197.5 L 706.5 207 L 706.5 216.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -334,7 +340,8 @@
 <g data-box-drawing="single">
 <path d="M 13.5 233.5 L 13.5 243 L 13.5 252.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="248" xml:space="preserve" fill="#5f5f5f">73.0 °C  158.0 W</text>
+<text x="81" y="248" xml:space="preserve" fill="#5f5f5f">73.0 °C</text>
+<text x="162" y="248" xml:space="preserve" fill="#5f5f5f">158.0 W</text>
 <g data-box-drawing="single">
 <path d="M 706.5 233.5 L 706.5 243 L 706.5 252.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -772,7 +779,8 @@
 <g data-box-drawing="single">
 <path d="M 13.5 395.5 L 13.5 405 L 13.5 414.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="410" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 0  NVIDIA GTX 1080 Ti</text>
+<text x="27" y="410" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 0</text>
+<text x="90" y="410" xml:space="preserve" fill="#005f5f" font-weight="bold">NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 706.5 395.5 L 706.5 405 L 706.5 414.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -790,7 +798,8 @@
 <g data-box-drawing="single">
 <path d="M 13.5 431.5 L 13.5 441 L 13.5 450.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="446" xml:space="preserve" fill="#5f5f5f">73.0 °C  187.0 W</text>
+<text x="81" y="446" xml:space="preserve" fill="#5f5f5f">73.0 °C</text>
+<text x="162" y="446" xml:space="preserve" fill="#5f5f5f">187.0 W</text>
 <g data-box-drawing="single">
 <path d="M 706.5 431.5 L 706.5 441 L 706.5 450.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -808,14 +817,16 @@
 <g data-box-drawing="single">
 <path d="M 13.5 467.5 L 13.5 477 L 13.5 486.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="482" xml:space="preserve" fill="#5f5f5f">6.0 / 11.0 GiB  +0.8 GiB shared RAM</text>
+<text x="81" y="482" xml:space="preserve" fill="#5f5f5f">6.0 / 11.0 GiB</text>
+<text x="225" y="482" xml:space="preserve" fill="#5f5f5f">+0.8 GiB shared RAM</text>
 <g data-box-drawing="single">
 <path d="M 706.5 467.5 L 706.5 477 L 706.5 486.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 485.5 L 13.5 495 L 13.5 504.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="500" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 1  NVIDIA GTX 1080 Ti</text>
+<text x="27" y="500" xml:space="preserve" fill="#005f5f" font-weight="bold">GPU 1</text>
+<text x="90" y="500" xml:space="preserve" fill="#005f5f" font-weight="bold">NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 706.5 485.5 L 706.5 495 L 706.5 504.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -833,7 +844,8 @@
 <g data-box-drawing="single">
 <path d="M 13.5 521.5 L 13.5 531 L 13.5 540.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="536" xml:space="preserve" fill="#5f5f5f">73.0 °C  158.0 W</text>
+<text x="81" y="536" xml:space="preserve" fill="#5f5f5f">73.0 °C</text>
+<text x="162" y="536" xml:space="preserve" fill="#5f5f5f">158.0 W</text>
 <g data-box-drawing="single">
 <path d="M 706.5 521.5 L 706.5 531 L 706.5 540.5" fill="none" stroke="#8787af" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>

@@ -6,16 +6,6 @@ keeping every mutating operation reviewed and capability-checked.
 
 ![Files two-pane manager](../generated/screenshots/ck-files.svg)
 
-At a filesystem namespace root, **Backspace** opens the read-only volume and
-mount view in that pane, shown below. It is a system-information view, not a
-writable parent directory.
-
-![Files volume and mount information](../generated/screenshots/ck-files-volumes.svg)
-
-**Location → Properties** displays the selected mount's exact capacity.
-
-![Files Volume Properties showing the mount, access state, and exact byte counts](../generated/screenshots/ck-files-volume-properties.svg)
-
 ## Usage
 
 ```text
@@ -36,6 +26,73 @@ On Linux and macOS, put `--osc52-clipboard` before the directory arguments
 when your terminal permits OSC 52 clipboard writes. Without the option,
 copied paths stay in the Files clipboard. On Windows, Files uses the native
 clipboard.
+
+## Workflows and dialogs
+
+### Reviewed Copy and Move (**F5** / **F6**)
+
+Every Copy or Move prepares a verified plan before touching the destination.
+When an incoming file matches an existing target, the review dialog highlights
+the conflict, lists preservation checks, and lets you choose a new name, skip
+conflicts, or cancel.
+
+![Files Copy review dialog showing source, destination, conflict resolution, and preservation review](../generated/screenshots/ck-files-copy-review.svg)
+
+Non-conflicting Move operations present the same explicit pre-flight review
+before starting the worker job.
+
+![Files Move review dialog showing source, destination, and preservation checks](../generated/screenshots/ck-files-move-review.svg)
+
+### Bounded Preview (**F3**) and Embedded Editor (**Ctrl+E**)
+
+Press **F3** or **Enter** on a regular file for a bounded read-only preview
+with one-key switching between text and hexadecimal views.
+
+![Files bounded read-only text preview with Show hex toggle](../generated/screenshots/ck-files-preview.svg)
+
+Press **Ctrl+E** (or **Tools → Edit file**) to open the embedded syntax-aware
+editor with line numbers, unsaved-change protection, and external-modification
+detection.
+
+![Files embedded syntax-aware editor showing JSON highlighting and line numbers](../generated/screenshots/ck-files-edit.svg)
+
+### Integrated Recursive Search (**Alt+F7**)
+
+**Tools → Search files** (**Alt+F7**) searches beneath the active pane by
+filename glob or regex and optional bounded content text.
+
+![Files recursive search dialog with glob pattern and content text fields](../generated/screenshots/ck-files-search.svg)
+
+### Compare, Diff, and Reviewed Directory Synchronization
+
+**Tools → Synchronize directories** compares both panes by thorough content and
+produces a reviewed two-way copy-only plan without inferred deletions.
+
+![Files directory compare and reviewed synchronization preview](../generated/screenshots/ck-files-sync.svg)
+
+**Tools → Diff files** compares the selected files in the left and right panes
+with unified text diffs or hexadecimal binary diffs.
+
+![Files unified file diff viewer comparing left and right pane files](../generated/screenshots/ck-files-diff.svg)
+
+### Ordinary Archives (ZIP / TAR / TAR.GZ)
+
+**Tools → Browse archive** inspects archive entries and uncompressed sizes
+before extraction, flagging unsafe paths or collisions explicitly.
+
+![Files archive browser showing ZIP entries and uncompressed sizes](../generated/screenshots/ck-files-archive.svg)
+
+### Volume and Mount View (**Backspace** at root)
+
+At a filesystem namespace root, **Backspace** opens the read-only volume and
+mount view in that pane, shown below. It is a system-information view, not a
+writable parent directory.
+
+![Files volume and mount information](../generated/screenshots/ck-files-volumes.svg)
+
+**Location → Properties** displays the selected mount's exact capacity.
+
+![Files Volume Properties showing the mount, access state, and exact byte counts](../generated/screenshots/ck-files-volume-properties.svg)
 
 ## Features
 

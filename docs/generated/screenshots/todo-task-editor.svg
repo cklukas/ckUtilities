@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="540" viewBox="0 0 900 540">
 <rect x="0" y="0" width="900" height="540" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <defs>
 <pattern id="dither1-0000aa" width="2" height="2" patternUnits="userSpaceOnUse">
 <rect x="0" y="0" width="1" height="1" fill="#0000aa" shape-rendering="crispEdges"/>
@@ -739,7 +739,8 @@
 </g>
 <text x="261" y="194" xml:space="preserve" fill="#ffff55">D</text>
 <text x="270" y="194" xml:space="preserve" fill="#000000">ue:</text>
-<text x="351" y="194" xml:space="preserve" fill="#ffffff">— no date —                    ▾</text>
+<text x="351" y="194" xml:space="preserve" fill="#ffffff">— no date —</text>
+<text x="630" y="194" xml:space="preserve" fill="#ffffff">▾</text>
 <g data-box-drawing="double">
 <path d="M 652.5 179.5 L 652.5 189 L 652.5 198.5" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 652.5 179.5 L 652.5 189 L 652.5 198.5" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>

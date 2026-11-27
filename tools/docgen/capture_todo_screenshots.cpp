@@ -19,6 +19,7 @@
 
 #include "frame_svg.hpp"
 #include "memory_todo_repository.hpp"
+#include "svg_align.hpp"
 #include "todo_app.hpp"
 
 namespace {
@@ -75,7 +76,7 @@ void write_scene(const std::filesystem::path& screenshot_directory,
     const std::filesystem::path svg_path = screenshot_directory / (std::string(name) + ".svg");
     std::ofstream svg(svg_path, std::ios::binary);
     if (!svg) fail("could not open an output SVG");
-    svg << docgen::render_virtual_display_svg(scene.terminal.display());
+    svg << ck::docgen::align_svg_text_runs(docgen::render_virtual_display_svg(scene.terminal.display()));
     if (!svg) fail("could not write an output SVG");
     std::fprintf(stderr, "wrote %s\n", svg_path.string().c_str());
 

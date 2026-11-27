@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "sysmon_test_fixture.hpp"
 #include "frame_svg.hpp"
+#include "svg_align.hpp"
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -14,7 +15,7 @@ void capture(ck::testing::SysmonFixture& fixture, const std::filesystem::path& o
     if (!input || fixture.frame() != expected) throw std::runtime_error("sysmon screenshot differs from golden: " + std::string(golden));
     ckv::docgen::verify_decoded_cells(fixture.app, fixture.terminal);
     std::ofstream image(output / (std::string(name) + ".svg"), std::ios::binary);
-    image << ckv::docgen::render_virtual_display_svg(fixture.terminal.display());
+    image << ck::docgen::align_svg_text_runs(ckv::docgen::render_virtual_display_svg(fixture.terminal.display()));
     if (!image) throw std::runtime_error("cannot write sysmon screenshot");
 }
 }

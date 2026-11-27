@@ -34,21 +34,48 @@
 #include "disk_usage_options.hpp"
 #include "edit_app.hpp"
 #include "files_app.hpp"
+#include "files_ordinary_archive.hpp"
 #include "find_app.hpp"
 #include "frame_svg.hpp"
 #include "json_view_app.hpp"
 #include "launcher_app.hpp"
+#include "native_filesystem.hpp"
 #include "simulated_filesystem.hpp"
+#include "svg_align.hpp"
 
 namespace
 {
 
 void write_svg(const std::filesystem::path &directory, const std::string &name,
-               const ckv::term::VirtualDisplay &display)
+               const ckv::term::VirtualDisplay &display,
+               std::string_view replace_from = {}, std::string_view replace_to = {})
 {
     const std::filesystem::path path = directory / (name + ".svg");
+    std::string svg = ck::docgen::align_svg_text_runs(ckv::docgen::render_virtual_display_svg(display));
+    if (!replace_from.empty())
+    {
+        std::size_t pos = 0;
+        while ((pos = svg.find(replace_from, pos)) != std::string::npos)
+        {
+            svg.replace(pos, replace_from.size(), replace_to);
+            pos += replace_to.size();
+        }
+        // Also sanitize a truncated prefix of replace_from clipped by a window border.
+        for (std::size_t len = replace_from.size() - 1; len >= 6; --len)
+        {
+            const std::string needle = ">" + std::string(replace_from.substr(0, len)) + "</text>";
+            const std::string replacement =
+                ">" + std::string(replace_to.substr(0, std::min(len, replace_to.size()))) + "</text>";
+            pos = 0;
+            while ((pos = svg.find(needle, pos)) != std::string::npos)
+            {
+                svg.replace(pos, needle.size(), replacement);
+                pos += replacement.size();
+            }
+        }
+    }
     std::ofstream output(path, std::ios::binary);
-    output << ckv::docgen::render_virtual_display_svg(display);
+    output << svg;
     if (!output)
         throw std::runtime_error("could not write " + path.string());
     std::cerr << "wrote " << path << " (" << display.size().width << "x" << display.size().height
@@ -390,42 +417,44 @@ void capture_files(const std::filesystem::path &directory)
         [&application] { application.request_quit(); }, ck::vision::ThemeScheme::Classic,
         std::array<ck::vision::FilesCompletionService *, 2>{}, planning_service.get(), execution_service.get(),
         journal_root, ck::vision::FilesSettingsBinding{}, volume_service.get());
-    for (int step = 0; step != 500 && (app->pending(0) || app->pending(1)); ++step) {
+    const auto pump_until = [&](auto predicate) {
+        for (int step = 0; step != 1000 && !predicate(); ++step)
+        {
+            application.step(clock.now_nanos());
+            clock.advance(1'000'000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
         application.step(clock.now_nanos());
-        clock.advance(1'000'000);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    application.step(clock.now_nanos());
-    // Select a regular file row so Copy, Move, Trash, and Delete are all active
+    };
+    pump_until([&] { return !app->pending(0) && !app->pending(1); });
+    // Select a regular file row (README.md) so Copy, Move, Trash, and Delete are all active
     // and ready in the main two-pane overview screenshot.
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
     application.step(clock.now_nanos());
-    for (int step = 0; step != 500 && (app->pending(0) || app->pending(1)); ++step) {
-        application.step(clock.now_nanos());
-        clock.advance(1'000'000);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    application.step(clock.now_nanos());
+    pump_until([&] { return !app->pending(0) && !app->pending(1); });
     if (app->status(0).find("unavailable") != std::string::npos)
         throw std::runtime_error("unexpected unavailable hint in Files capture: " + app->status(0));
     write_svg(directory, "ck-files", terminal.display());
+
+    // Integrated recursive search dialog (Alt+F7).
+    if (!app->open_search())
+        throw std::runtime_error("could not open documentation Files search dialog");
+    application.step(clock.now_nanos());
+    terminal.inject_event(ckv::TextEvent{"*.json", false});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, ""}});
+    terminal.inject_event(ckv::TextEvent{"ck-files", false});
+    application.step(clock.now_nanos());
+    write_svg(directory, "ck-files-search", terminal.display());
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
+    application.step(clock.now_nanos());
+
     if (!app->navigate(0, documentation_path("/")))
         throw std::runtime_error("could not navigate to the documentation Files root");
-    for (int step = 0; step != 500 && app->pending(0); ++step)
-    {
-        application.step(clock.now_nanos());
-        clock.advance(1'000'000);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    pump_until([&] { return !app->pending(0); });
     if (!app->navigate_parent(0))
         throw std::runtime_error("could not request the documentation Files volume view");
-    for (int step = 0; step != 500 && app->volume_info_pending(); ++step)
-    {
-        application.step(clock.now_nanos());
-        clock.advance(1'000'000);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    pump_until([&] { return !app->volume_info_pending(); });
     if (app->volume_info_pending() || !app->model(0).volume_cursor())
         throw std::runtime_error("documentation Files volume inventory did not finish");
     application.step(clock.now_nanos());
@@ -441,6 +470,252 @@ void capture_files(const std::filesystem::path &directory)
     planning_service->join();
     execution_service->join();
     volume_service->join();
+
+    // Native fixture captures for real-filesystem parity tools:
+    // Preview (F3), Embedded Editor (Ctrl+E), Compare & Sync, File Diff, and Archive Browser.
+    struct TempDirGuard {
+        std::filesystem::path root;
+        ~TempDirGuard() {
+            std::error_code ec;
+            std::filesystem::remove_all(root, ec);
+        }
+    };
+    std::filesystem::path fixture_root = std::filesystem::temp_directory_path() / "ckw";
+    if (const char *env_fixture = std::getenv("CKTOOLS_DOCGEN_FIXTURE_ROOT");
+        env_fixture != nullptr && *env_fixture != '\0')
+        fixture_root = env_fixture;
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(fixture_root, ec);
+    }
+    TempDirGuard guard{fixture_root};
+    const auto left_dir = fixture_root / "left";
+    const auto right_dir = fixture_root / "right";
+    std::filesystem::create_directories(left_dir / "Documents");
+    std::filesystem::create_directories(right_dir / "Archive");
+    const auto write_text_file = [](const std::filesystem::path &path, std::string_view text) {
+        std::ofstream out(path, std::ios::binary);
+        out << text;
+        if (!out)
+            throw std::runtime_error("could not write native fixture file: " + path.string());
+    };
+    write_text_file(
+        left_dir / "Documents" / "notes.md",
+        "# Project Notes\n\n- Verified copy/move preflight\n- Embedded editor & terminal\n");
+    write_text_file(
+        left_dir / "README.md",
+        "# CK Utilities — ck-files\n\n"
+        "Two-pane terminal file manager built on ckVision 2.1.\n\n"
+        "## Highlights\n"
+        "- Reviewed Copy (F5) and Move (F6) with conflict resolution\n"
+        "- Integrated recursive search (Alt+F7) and directory tree (Alt+T)\n"
+        "- Embedded syntax-aware editor (Ctrl+E) and terminal (Ctrl+O)\n"
+        "- Native ZIP/TAR archive browsing, creation, and safe extraction\n");
+    write_text_file(
+        left_dir / "release-notes.json",
+        "{\n"
+        "  \"product\": \"CK Utilities\",\n"
+        "  \"tool\": \"ck-files\",\n"
+        "  \"version\": \"0.2.0\",\n"
+        "  \"features\": [\n"
+        "    \"reviewed-copy-move\",\n"
+        "    \"recursive-search\",\n"
+        "    \"embedded-editor\",\n"
+        "    \"directory-sync\",\n"
+        "    \"ordinary-archives\"\n"
+        "  ],\n"
+        "  \"platforms\": [\"macOS\", \"Linux\", \"Windows\"],\n"
+        "  \"status\": \"ready\"\n"
+        "}\n");
+    write_text_file(
+        right_dir / "README.md",
+        "# CK Utilities — ck-files\n\n"
+        "Two-pane terminal file manager built on ckVision 2.1.\n\n"
+        "## Highlights\n"
+        "- Reviewed Copy (F5) and Move (F6) with conflict resolution\n"
+        "- Integrated recursive search (Alt+F7)\n"
+        "- Bounded text and hexadecimal preview (F3)\n"
+        "- Read-only volume and mount inspection\n");
+    write_text_file(
+        right_dir / "space-report.txt",
+        "Workspace: 12.0 GiB free / 20.0 GiB total\nArchive:   214.0 GiB free / 500.0 GiB total\n");
+
+    // Create a real ZIP archive in left/ so Browse Archive renders actual entries.
+    const auto native_path = [](const std::filesystem::path &p) {
+        auto obs = ck::files::NativeAbsolutePath::from_host(p);
+        if (!obs.value())
+            throw std::runtime_error("invalid native fixture path: " + p.string());
+        return *obs.value();
+    };
+    const auto archive_path = native_path(left_dir / "release-bundle.zip");
+    const std::vector<ck::vision::OrdinaryArchiveInputItem> archive_items = {
+        {"README.md", native_path(left_dir / "README.md"), false},
+        {"release-notes.json", native_path(left_dir / "release-notes.json"), false},
+        {"Documents/notes.md", native_path(left_dir / "Documents" / "notes.md"), false},
+    };
+    const auto arc_res = ck::vision::create_ordinary_archive(
+        archive_path, ck::vision::OrdinaryArchiveFormat::Zip, archive_items);
+    if (!arc_res.ok)
+        throw std::runtime_error("could not create documentation archive fixture: " + arc_res.error_message);
+
+    const std::string sanitize_from = native_path(fixture_root).display_text();
+    const std::string sanitize_to = "/workspace";
+
+    auto make_native_backend = [&] {
+        static const ck::files::AdapterScope docgen_native_scope;
+        ck::vision::FilesPaneBackend backend;
+        backend.filesystem = [] {
+            return std::make_unique<ck::files::NativeFileSystem>(docgen_native_scope);
+        };
+        backend.workspace = [] {
+            return ck::files::Observation<std::shared_ptr<ck::files::IndexFileFactory>>::available(
+                std::make_shared<DocumentationIndexFactory>());
+        };
+        backend.storage_model = ck::files::StorageModel::LinuxStatx;
+        backend.home = [right_p = native_path(right_dir)](ck::files::NativePathLimits, std::stop_token) {
+            return ck::files::Observation<ck::files::NativeAbsolutePath>::available(right_p);
+        };
+        return backend;
+    };
+
+    auto capture_native_scene = [&](auto &&action) {
+        ckv::ManualClock nclock;
+        ckv::term::HeadlessTerminal nterm(ckv::Size{120, 34}, ckv::term::headless_no_graphics_profile());
+        ckv::ui::Application napp_ui(nterm, nclock);
+        ck::vision::FilesAppWake nwake(napp_ui);
+        auto nleft = std::make_unique<ck::vision::FilesPaneService>(
+            make_native_backend(), ck::vision::FilesPaneServiceLimits{}, nwake.callback());
+        auto nright = std::make_unique<ck::vision::FilesPaneService>(
+            make_native_backend(), ck::vision::FilesPaneServiceLimits{}, nwake.callback());
+        auto nplan = std::make_unique<ck::vision::FilesOperationPlanningService>(nwake.callback());
+        auto nexec = std::make_unique<ck::vision::FilesOperationExecutionService>(nwake.callback());
+        std::filesystem::path journal_dir = fixture_root / "journals";
+        if (const char *env_journal = std::getenv("CKTOOLS_DOCGEN_JOURNAL_ROOT");
+            env_journal != nullptr && *env_journal != '\0')
+            journal_dir = env_journal;
+        auto njournal = std::make_shared<const ck::files::NativeAbsolutePath>(native_path(journal_dir));
+        auto napp = std::make_unique<ck::vision::FilesApp>(
+            napp_ui,
+            std::array<ck::vision::FilesPaneService *, 2>{nleft.get(), nright.get()},
+            nwake,
+            std::array<ck::files::NativeAbsolutePath, 2>{native_path(left_dir), native_path(right_dir)},
+            [&napp_ui] { napp_ui.request_quit(); }, ck::vision::ThemeScheme::Classic,
+            std::array<ck::vision::FilesCompletionService *, 2>{}, nplan.get(), nexec.get(), njournal);
+        const auto npump = [&](auto pred) {
+            for (int step = 0; step != 1000 && !pred(); ++step)
+            {
+                napp_ui.step(nclock.now_nanos());
+                nclock.advance(1'000'000);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            napp_ui.step(nclock.now_nanos());
+        };
+        npump([&] { return !napp->pending(0) && !napp->pending(1); });
+        auto select_row_by_name = [&](std::size_t pane, std::string_view name) {
+            if (napp->active_pane() != pane)
+            {
+                napp->switch_pane();
+                napp_ui.step(nclock.now_nanos());
+            }
+            const auto *rows = napp->model(pane).visible_rows();
+            if (!rows)
+                throw std::runtime_error("no rows visible in native Files fixture");
+            std::size_t target_idx = rows->size();
+            for (std::size_t i = 0; i < rows->size(); ++i)
+            {
+                if ((*rows)[i].display_name == name)
+                {
+                    target_idx = i;
+                    break;
+                }
+            }
+            if (target_idx == rows->size())
+                throw std::runtime_error("row not found in native Files fixture: " + std::string(name));
+            for (std::size_t i = 0; i < target_idx; ++i)
+            {
+                nterm.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+                napp_ui.step(nclock.now_nanos());
+            }
+            npump([&] { return !napp->pending(0) && !napp->pending(1); });
+        };
+        action(napp_ui, nterm, *napp, npump, select_row_by_name);
+        napp.reset();
+        nleft->join();
+        nright->join();
+        nplan->join();
+        nexec->join();
+    };
+
+    // 0a) Copy review dialog (README.md conflicts with right/README.md).
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &npump, auto &select_row) {
+        select_row(0, "README.md");
+        const auto copy_cmd = ui.commands().id_for("ck.files.copy");
+        if (!copy_cmd || !ui.execute_command(*copy_cmd))
+            throw std::runtime_error("could not start documentation Files copy review: " +
+                                     fapp.availability("ck.files.copy").reason);
+        npump([&] { return fapp.operation_review_pending(); });
+        if (!fapp.operation_review_pending())
+            throw std::runtime_error("documentation Files copy review did not open: " + fapp.status(0));
+        write_svg(directory, "ck-files-copy-review", term.display(), sanitize_from, sanitize_to);
+    });
+
+    // 0b) Move review dialog (release-notes.json -> right/).
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &npump, auto &select_row) {
+        select_row(0, "release-notes.json");
+        const auto move_cmd = ui.commands().id_for("ck.files.move");
+        if (!move_cmd || !ui.execute_command(*move_cmd))
+            throw std::runtime_error("could not start documentation Files move review");
+        npump([&] { return fapp.operation_review_pending(); });
+        if (!fapp.operation_review_pending())
+            throw std::runtime_error("documentation Files move review did not open: " + fapp.status(0));
+        write_svg(directory, "ck-files-move-review", term.display(), sanitize_from, sanitize_to);
+    });
+
+    // 1) Bounded text preview (F3 on README.md).
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &npump, auto &select_row) {
+        select_row(0, "README.md");
+        const auto preview_cmd = ui.commands().id_for("ck.files.preview");
+        if (!preview_cmd || !ui.execute_command(*preview_cmd))
+            throw std::runtime_error("could not open documentation Files preview");
+        npump([&] { return !fapp.pending(0) && fapp.preview_pending(); });
+        write_svg(directory, "ck-files-preview", term.display(), sanitize_from, sanitize_to);
+    });
+
+    // 2) Embedded syntax-aware file editor (Ctrl+E on release-notes.json).
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &, auto &select_row) {
+        select_row(0, "release-notes.json");
+        if (!fapp.open_embedded_editor(false))
+            throw std::runtime_error("could not open documentation Files embedded editor");
+        ui.step(0);
+        write_svg(directory, "ck-files-edit", term.display(), sanitize_from, sanitize_to);
+    });
+
+    // 3) Compare & reviewed directory synchronization preview.
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &, auto &) {
+        if (!fapp.open_sync_directories())
+            throw std::runtime_error("could not open documentation Files sync preview");
+        ui.step(0);
+        write_svg(directory, "ck-files-sync", term.display(), sanitize_from, sanitize_to);
+    });
+
+    // 4) File diff viewer (left/README.md vs right/README.md).
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &, auto &select_row) {
+        select_row(1, "README.md");
+        select_row(0, "README.md");
+        if (!fapp.open_diff_files())
+            throw std::runtime_error("could not open documentation Files diff viewer");
+        ui.step(0);
+        write_svg(directory, "ck-files-diff", term.display(), sanitize_from, sanitize_to);
+    });
+
+    // 5) Ordinary archive browser (release-bundle.zip).
+    capture_native_scene([&](auto &ui, auto &term, auto &fapp, auto &, auto &select_row) {
+        select_row(0, "release-bundle.zip");
+        if (!fapp.open_archive_browse())
+            throw std::runtime_error("could not open documentation Files archive browser");
+        ui.step(0);
+        write_svg(directory, "ck-files-archive", term.display(), sanitize_from, sanitize_to);
+    });
 }
 
 void capture_launcher(const std::filesystem::path &directory)

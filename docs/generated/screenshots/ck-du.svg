@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="612" viewBox="0 0 1080 612">
 <rect x="0" y="0" width="1080" height="612" fill="#000000"/>
-<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:15px}</style>
+<style>text{font-family:ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', monospace;font-size:14.5px}</style>
 <rect x="0" y="0" width="1080" height="18" fill="#c8c8c8"/>
 <rect x="0" y="18" width="1080" height="18" fill="#0000aa"/>
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
@@ -26,7 +26,8 @@
 <text x="126" y="14" xml:space="preserve" fill="#aa0000">C</text>
 <text x="135" y="14" xml:space="preserve" fill="#000000">loud</text>
 <text x="189" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="198" y="14" xml:space="preserve" fill="#000000">elp                                                                                         08:00</text>
+<text x="198" y="14" xml:space="preserve" fill="#000000">elp</text>
+<text x="1026" y="14" xml:space="preserve" fill="#000000">08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -397,12 +398,16 @@
 <g data-box-drawing="single">
 <path d="M 26.5 45 L 31.5 45 L 36.5 45" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="36" y="50" xml:space="preserve" fill="#000000">workspace  [25.0 MB, 128 files]</text>
+<text x="36" y="50" xml:space="preserve" fill="#000000">workspace</text>
+<text x="135" y="50" xml:space="preserve" fill="#000000">[25.0 MB, 128 files]</text>
 <text x="522" y="50" xml:space="preserve" fill="#55ffff">▲</text>
 <g data-box-drawing="single">
 <path d="M 535.5 35.5 L 535.5 45 L 535.5 54.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="540" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Directory                        Files      Directories   T</text>
+<text x="540" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Directory</text>
+<text x="837" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Files</text>
+<text x="936" y="50" xml:space="preserve" fill="#000000" font-weight="bold">Directories</text>
+<text x="1062" y="50" xml:space="preserve" fill="#000000" font-weight="bold">T</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 35.5 L 1075.5 45 L 1075.5 54.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 35.5 L 1075.5 45 L 1075.5 54.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -420,11 +425,14 @@
 <g data-box-drawing="single">
 <path d="M 53.5 63 L 58.5 63 L 63.5 63" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="63" y="68" xml:space="preserve" fill="#000000">src  [13.0 MB, 68 files]</text>
+<text x="63" y="68" xml:space="preserve" fill="#000000">src</text>
+<text x="108" y="68" xml:space="preserve" fill="#000000">[13.0 MB, 68 files]</text>
 <g data-box-drawing="single">
 <path d="M 535.5 53.5 L 535.5 63 L 535.5 72.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="540" y="68" xml:space="preserve" fill="#000000">docs                             42         0</text>
+<text x="540" y="68" xml:space="preserve" fill="#000000">docs</text>
+<text x="837" y="68" xml:space="preserve" fill="#000000">42</text>
+<text x="936" y="68" xml:space="preserve" fill="#000000">0</text>
 <text x="1062" y="68" xml:space="preserve" fill="#55ffff">▲</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 53.5 L 1075.5 63 L 1075.5 72.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -446,11 +454,14 @@
 <g data-box-drawing="single">
 <path d="M 80.5 81 L 85.5 81 L 90.5 81" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="90" y="86" xml:space="preserve" fill="#000000">vision  [5.00 MB, 24 files]</text>
+<text x="90" y="86" xml:space="preserve" fill="#000000">vision</text>
+<text x="162" y="86" xml:space="preserve" fill="#000000">[5.00 MB, 24 files]</text>
 <g data-box-drawing="single">
 <path d="M 535.5 71.5 L 535.5 81 L 535.5 90.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="540" y="86" xml:space="preserve" fill="#000000">src                              68         1</text>
+<text x="540" y="86" xml:space="preserve" fill="#000000">src</text>
+<text x="837" y="86" xml:space="preserve" fill="#000000">68</text>
+<text x="936" y="86" xml:space="preserve" fill="#000000">1</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -468,11 +479,14 @@
 <g data-box-drawing="single">
 <path d="M 53.5 99 L 58.5 99 L 63.5 99" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="63" y="104" xml:space="preserve" fill="#000000">docs  [7.00 MB, 42 files]</text>
+<text x="63" y="104" xml:space="preserve" fill="#000000">docs</text>
+<text x="117" y="104" xml:space="preserve" fill="#000000">[7.00 MB, 42 files]</text>
 <g data-box-drawing="single">
 <path d="M 535.5 89.5 L 535.5 99 L 535.5 108.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="540" y="104" xml:space="preserve" fill="#000000">tests                            18         0</text>
+<text x="540" y="104" xml:space="preserve" fill="#000000">tests</text>
+<text x="837" y="104" xml:space="preserve" fill="#000000">18</text>
+<text x="936" y="104" xml:space="preserve" fill="#000000">0</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -490,7 +504,8 @@
 <g data-box-drawing="single">
 <path d="M 53.5 117 L 58.5 117 L 63.5 117" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="63" y="122" xml:space="preserve" fill="#000000">tests  [5.00 MB, 18 files]</text>
+<text x="63" y="122" xml:space="preserve" fill="#000000">tests</text>
+<text x="126" y="122" xml:space="preserve" fill="#000000">[5.00 MB, 18 files]</text>
 <g data-box-drawing="single">
 <path d="M 535.5 107.5 L 535.5 117 L 535.5 126.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
