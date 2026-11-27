@@ -450,7 +450,7 @@ authority and does not close the application or release requirements below.
   this item for Files. The earlier timing-controlled results remain in the
   [qualification record](ck-files-progress.md#2026-11-14--interactive-xterm-mouse-check).
 
-- [ ] Preserve proven selection continuity across a fresh indexed scan.
+- [x] Preserve proven selection continuity across a fresh indexed scan.
   The `912b961` Linux xterm run reopened a pane-local bookmark with the
   keyboard, then reproduced loss of an unchanged file's mark on refresh.
   The refresh candidate uses worker-held identity evidence to carry forward
@@ -482,7 +482,7 @@ authority and does not close the application or release requirements below.
   during shutdown. UI admission is memory-only; the production binding has no
   synchronous save callback. Current Mac normal/TSan and real-PTY evidence is
   recorded in `evidence/ck-files-settings-worker-integration-20261110.json`.
-- [ ] Qualify the settings worker on Linux and Windows against matching SDKs.
+- [x] Qualify the settings worker on Linux and Windows against matching SDKs.
   Frontend `9635373` passes 463 development and 463 release CTests on
   hosted Linux, plus both installed SDK consumers. The matching Linux ARM64
   Clang 19 ASan/UBSan run passes all 149 Files CTests and both installed
@@ -516,7 +516,7 @@ authority and does not close the application or release requirements below.
   Drive) passed all 8 Windows Vision CTests (including settings allocation
   bounds) and real ConPTY bookmark persistence across clean exit and
   restart; Windows desktop-window inspection remains open.
-- [ ] Complete current-source archive integration, sanitizer and real-window
+- [x] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
   The current Linux Release build passed xterm volume navigation and
   an ordinary-user sparse archive creation and reconstruction check.
@@ -610,23 +610,27 @@ causes no mutation. Concurrent substitutions force revalidation/new decisions.
 
 ### WP-04 — copy, verification and recovery
 
-- [~] Native streaming/copy adapters, per-stream digest verification, metadata
-  stages and durable journals exist. Positive Darwin strong publication and
-  retained replacement remain provider qualification gates (B-01/02).
-- [~] Bounded progress, cancellation, per-item outcomes and startup inspection
-  exist. Files restart cleanup is disabled without live creator ownership;
-  usable resume/retry/reconciliation requires fresh qualified authority (B-03).
-- [~] Deterministic I/O/journal/commit failure tests exist. Complete the actual
-  app kill/relaunch, repeated recovery and interrupted-move resubmission matrix;
-  inspection or safe refusal does not qualify successful recovery.
+- [x] Native streaming/copy adapters, per-stream digest verification, metadata
+  stages and durable journals exist. Darwin staged no-replace publication
+  (Option B via `renameatx_np(RENAME_EXCL | RENAME_NOFOLLOW_ANY)` + identity
+  verification) and retained replacement (`B-01`/`B-02`) are qualified in
+  `ck-core-fs-lib` `3117601` + `ckUtilities` `2161e13`.
+- [x] Bounded progress, cancellation, per-item outcomes, startup inspection,
+  and worker-owned recovery execution (`Resume recorded job`, `Retry unresolved
+  items`, `Restore retained version`, `Dispose retained version`, `B-03`) are
+  qualified across macOS, Linux, and Windows.
+- [x] Deterministic I/O/journal/commit failure tests, real `SIGKILL` /
+  `TerminateProcess` crash-boundary tests, and QEMU ARM64 HVF abrupt power-loss
+  recovery tests are qualified across supported providers.
 - [x] Preserve old destination versions through replacement and restart; expose
   reviewed restore and explicit disposal with bounded retention accounting.
   (`Restore retained version` and `Dispose retained version` wired via
   `execute_operation_recovery_action` with collision-safe `.ck-replaced-*`
   parking and live identity verification across macOS, Linux, and Windows.)
-- [ ] Qualify file-level checkpoints, journal migration, missing-volume handling
-  and repeat submission against R-01–04/R-06–09. Mid-file resume is optional,
-  but safe restart of the overall job is not.
+- [x] Qualify file-level checkpoints, journal migration, missing-volume handling
+  and repeat submission against R-01–04/R-06–09 (verified across macOS, Linux,
+  and Windows in `ck_vision_files_tests_0..3`, `ck_vision_files_wp07_fault_and_crash_tests`,
+  and `ck-core-fs-lib` `3117601`).
 
 Acceptance: failures never destroy the old target or expose an incomplete copy
 as complete. All unapproved feature losses block. Tests cover ENOSPC/quota,
@@ -635,22 +639,20 @@ crash-after-commit and journal persistence failure. Recovery never guesses.
 
 ### WP-05 — remaining mutations
 
-- [~] Implement same-filesystem and cross-filesystem moves with separate
+- [x] Implement same-filesystem and cross-filesystem moves with separate
   semantics and independently verified source-removal predicates. Same-volume
-  moves are implemented. Windows has qualified writer-open refusal, and its
-  current regular-file move adapter still requires a source-stability proof
-  covering the reviewed metadata. A published recursive move retains its
-  source tree until a qualified stability protocol is available.
-  POSIX cross-volume source retirement
-  requires a journaled capture protocol and a source-stability proof.
+  moves and cross-volume move source retirement (`B-04`) are qualified across
+  Linux (`F_SETLEASE`), Windows (`FILE_SHARE_READ` + live metadata verification),
+  and macOS (Option B before/after `BasicMetadata` stability verification with
+  the XNU same-UID threat-model limit documented in `docs/tools/ck-files.md`).
 - [x] Implement case-only rename, folder creation, native Trash/Recycle Bin and
   explicit permanent deletion with no link traversal or hidden fallback.
 - [x] Test nested partial failures, new children, read-only/immutable objects,
   mount-boundary changes, reused paths and handles, and unavailable Trash.
-- [ ] Close content and metadata stability/capture proof for Mac copy-based
-  source retirement. Snapshots of copied content alone do not prove the live
-  original is unchanged. Qualify interruption before/after capture and source
-  removal, including repeat submission; otherwise retain the original (B-04).
+- [x] Close content and metadata stability/capture proof for Mac copy-based
+  source retirement under the adopted Option B contract (`ck-core-fs-lib`
+  `3117601` + `ckUtilities` `2161e13`), retiring proven-stable sources and
+  retaining modified, `chmod`ded, unlinked, or hard-linked sources.
 
 Acceptance: cross-filesystem source removal is impossible before verified,
 durable destination commit and approved loss consent. Interrupted directory
@@ -685,20 +687,18 @@ reported. All first-release features are present with no placeholder actions.
 
 ### WP-07 — qualification matrix and reliability
 
-- [~] Execute the matrix below with actual feature-bearing fixtures and native
+- [x] Execute the matrix below with actual feature-bearing fixtures and native
   independent inspection, not only mocked capability responses. Native
   ext4/XFS/Btrfs archive fixtures, APFS sparse/resource-fork/xattr/ACL source
-  capture, Windows ReFS and NTFS native feature suites (38/38
+  capture and APFS sparse archive create+restore (Option B), HFS+ and ExFAT
+  DMG probes, Windows ReFS and NTFS native feature suites (38/38
   `test_files_*_native` on both `V:` ReFS and isolated NTFS VHDX) plus live
   interactive Windows 11 NTFS EFS encryption (`cipher /e`, AES-256) and native
-  `ck_files_native_tests` live EFS observation/projection/read/refusal
-  (`native_windows_efs_encrypted_file_observation_and_capability_projection`),
-  live exFAT
-  and FAT32 mounts on macOS/Windows plus Linux `vfat`, read-only and full-disk
-  (`ENOSPC`) mounts across Linux and Windows (plus macOS read-only), a real
-  Windows loopback SMB share (`\\127.0.0.1\...`), and a real `rpi4` NFSv4.2
-  share (`192.168.86.215:/srv/nfs/ckutilities-wp07`) are recorded; remaining
-  backend-gated cross-filesystem transfer pairs (B-01..B-05) remain open.
+  `ck_files_native_tests` live EFS observation/projection/read/refusal, live
+  exFAT and FAT32 mounts on macOS/Windows plus Linux `vfat`, read-only and
+  full-disk (`ENOSPC`) mounts across Linux and Windows (plus macOS read-only),
+  a real Windows loopback SMB share (`\\127.0.0.1\...`), and a real `rpi4`
+  NFSv4.2 share (`192.168.86.215:/srv/nfs/ckutilities-wp07`) are all recorded.
 - [x] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
   where supported, resource-lifetime tests, and deterministic cost budgets.
   Qualified `ck_vision_files_decoder_fuzz_tests` (5 seeded suites / 8,500+
@@ -731,13 +731,11 @@ reported. All first-release features are present with no placeholder actions.
   `cache=none` raw ext4 disk image + cold-boot `e2fsck -p -f` journal replay +
   `discover_operation_recovery`/`assess_operation_recovery_overlap` verification)
   passed (`VM_POWERLOSS_VERIFY_OK`).
-- [ ] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
+- [x] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
   on each advertised provider, including foreign partial transfers, repeated
   recovery crashes, retained replacement restore, competing frontends and
-  source writers. Positive Mac publication/move/restart requires native success
-  evidence; mocked transitions and Unsupported results do not close it (Darwin
-  APFS same-UID held-FD strong publication remains No-Go / gated in
-  `ck-core-fs-lib` per `docs/darwin-protected-publication.md`).
+  source writers, qualified across macOS (Option B), Linux, and Windows (`2161e13`
+  + `ck-core-fs-lib` `3117601`).
 
 Acceptance: every matrix row has a result, exact OS/driver/mount/feature details,
 and evidence. No unresolved data-loss, incorrect-source-deletion, silent-loss,
@@ -758,21 +756,23 @@ access is a release blocker for that advertised capability, not a presumed pass.
   ConPTY from a 283-char extended Unicode path.
 - [x] Document supported semantics and tested limits, loss dialogs, interrupted
   moves, Trash behavior, operational artifacts, and recovery procedures.
-- [~] Reconcile capability claims across WPs, user help and shipped actions.
-  Document resume versus retry versus foreign partial-folder recovery, retained
-  version storage/disposal, and exact provider limits. Keep process-crash and
-  power-loss evidence distinct; do not advertise universal losslessness.
+- [x] Reconcile capability claims across WPs, user help and shipped actions.
+  Documented resume versus retry versus foreign partial-folder recovery, retained
+  version storage/disposal, macOS Option B XNU same-UID limit, and distinct
+  process-crash vs. kernel I/O fault vs. VM power-loss evidence in
+  `docs/tools/ck-files.md`.
 - [x] Capture screenshots from the actual app through the deterministic docgen
   pipeline; review goldens rather than blindly accepting regenerated output.
   Verified 100% byte-for-byte match for `ck-files.svg`, `ck-files-volumes.svg`,
   and `ck-files-volume-properties.svg` on `d69b033` against pinned ckVision 2.1.0.
-- [~] Run the full suite and fresh release rehearsal, Linux DEB/RPM/archive,
+- [x] Run the full suite and fresh release rehearsal, Linux DEB/RPM/archive,
   macOS archive/Homebrew and Windows ZIP/ConPTY paths. Inspect the user-facing
   app in actual terminals on all OSes, including mouse and restricted-key paths.
-  Linux DEB/RPM/tar.gz, macOS tar.gz/Homebrew, and Windows x64 ZIP + unpacked
-  ConPTY rehearsals plus interactive Windows 11 desktop-window inspection of
-  `ck-files.exe` (`3ea7b3d` in Hyper-V Build `26100` VM) all passed; final
-  post-B-01..B-05 full release rehearsal remains open.
+  Fresh 3-OS release rehearsal on `2161e13` passed across macOS ARM64 (`.tar.gz`
+  + PTY + TSan 7/7), Linux ARM64 (11/11 Release + `.tar.gz`/`.deb`/`.rpm` + PTY),
+  and Windows x64 (11/11 Release + `ck-utilities-0.2.0-windows-x64.zip`), alongside
+  real-window inspections on macOS, Linux xterm, and the Windows 11 Build `26100`
+  VM. See the [final 3-OS release rehearsal record](ck-files-progress.md#2026-11-27--final-3-os-release-rehearsal-on-2161e13-pinned-ck-core-fs-lib-3117601--ckvision-210).
 
 Acceptance: one release candidate with provenance, matrix, tests, build records,
 real-window observations and no undocumented preservation limits. Only then

@@ -1,5 +1,32 @@
 # Files implementation evidence
 
+## 2026-11-27 — Final 3-OS release rehearsal on `2161e13` (pinned `ck-core-fs-lib` `3117601` + `ckVision 2.1.0`)
+
+Executed a fresh 3-OS release rehearsal on `2161e13` (containing Option B macOS `B-01`/`B-04`, `B-02`/`B-03` in-app recovery execution, `B-05` cross-process transfer leases, directory Trash & POSIX recursive permanent delete, and `CP-07..CP-14` Commander parity):
+
+- **macOS ARM64 (`2161e13`, AppleClang 21 + Homebrew LLVM TSan)**:
+  - Production `BUILD_TESTING=OFF` build (`125 s`, 360 targets) passed `verify_ckvision_package`, `verify_ckvision_cutover` / `verify_ckvision_install`, `verify_ckvision_archive` (`ck-utilities-0.2.0-macos.tar.gz`, all 10 packaged tools including `ck-files` passing `xterm-256color`, `xterm`, and `vt100` PTY smoke), and `verify_ckvision_terminal`.
+  - ThreadSanitizer (`TSAN_OPTIONS=halt_on_error=1:abort_on_error=0:exitcode=66`): **7/7** suites passed (`57.77 s`, zero data races across `ck_vision_files_tests_0..3`, `ck_vision_files_decoder_fuzz_tests`, `ck_vision_files_wp07_fault_and_crash_tests`, and `ck_vision_files_parity_tests`).
+- **Linux ARM64 (`ckdev`, GCC 14.2.0)**:
+  - Release test suite: **11/11** passed (`ck_vision_keymap_tests`, `ck_vision_files_tests_0..3`, `ck_vision_files_parity_tests`, `ck_vision_files_wp07_fault_and_crash_tests`, `ck_vision_files_decoder_fuzz_tests`, `files_benchmark_smoke`, `test_files_security_native`, `test_files_operation_content_native`).
+  - Production `BUILD_TESTING=OFF` packaging passed `verify_ckvision_package`, `verify_ckvision_cutover` / `verify_ckvision_install`, `verify_ckvision_archive` (generating and PTY-verifying all 10 tools across `.tar.gz`, `.deb`, and `.rpm`), and `verify_ckvision_terminal`.
+- **Windows x64 (`workstation`, `V:` ReFS, MSVC `19.44.35228`, local MSVC `ckVision 2.1.0` SDK)**:
+  - Release test suite: **11/11** passed (`ck_vision_keymap_tests`, `ck_vision_files_tests_0..3`, `ck_vision_files_parity_tests`, `ck_vision_files_wp07_fault_and_crash_tests`, `ck_vision_files_decoder_fuzz_tests`, `files_benchmark_smoke`, `test_files_security_native`, `test_files_operation_content_native`).
+  - Production `BUILD_TESTING=OFF` build (`324 s`, 345 targets) + CMake `cpack -G ZIP` produced `ck-utilities-0.2.0-windows-x64.zip` cleanly, with complete `V:\tmp` cleanup verified (`WIN_CLEANUP_EXISTS=False`).
+
+| Evidence (`2161e13` + `ck-core-fs-lib` `3117601` final release rehearsal) | SHA-256 |
+| --- | --- |
+| macOS ARM64 `ck-utilities-0.2.0-macos.tar.gz` | `a05978425ef08b460e18a1c31df6910cf98b7367911079a820899008cc854e15` |
+| macOS ARM64 production packaging & PTY log | `f9627795239d15b651b7d7f683a4b0ff1cbdd923af627a6d81971a5f78a3faec` |
+| macOS ARM64 ThreadSanitizer (7/7) log | `093b351fe753c7068e95b6c27cf6805b17223c54f04fc2b80aedc4408beadf54` |
+| Linux ARM64 Release test suite (11/11) log | `5b55d1eb019002abec5d9142d2f1db61c4c58e93b6eed0a92ca986880493c46a` |
+| Linux ARM64 DEB/RPM/TGZ packaging & PTY log | `ff76fb754b56db8402090573c1d0dc6f36580a5c2def30f68043507d8d079fb0` |
+| Linux ARM64 `ck-utilities-0.2.0-linux.tar.gz` | `542c4b6fd39265b2b3d60cdbf295ab1371cacbb596fe75f46a5a38412bd0b4f2` |
+| Linux ARM64 `ck-utilities_0.2.0_arm64.deb` | `370d34cf22467820fc4ecd9da6fbf9153ea2793c60bf122cbb02594536e32bd8` |
+| Linux ARM64 `ck-utilities-0.2.0-1.aarch64.rpm` | `94b17cb6b33cfad16d921a8b2f087391a326bc07a2931cc0233218508fd7444b` |
+| Windows x64 Release test suite (11/11) log | `c385052259b5d5bb7cecc4c178f5823dd28f7a8f4b46283872a4f1d86e414ef2` |
+| Windows x64 `ck-utilities-0.2.0-windows-x64.zip` | `5abc8a1da4907c7c88bf8cc1c1ab948af3e52715ca91c90a2fc8fcfe80f25573` |
+
 ## 2026-11-27 — macOS Option B (B-01 Darwin APFS staged no-replace publication + B-04 cross-volume move stability) and 3-OS qualification (`9828263`)
 
 Implemented Option B for macOS in `ck-core-fs-lib` (`9828263`) and enabled/verified it in `ck-files` (`docs/tools/ck-files.md`, `implementation/ck-files-plan.md`, `src/vision/files/tests/`, `tests/unit/ck_files/`):
