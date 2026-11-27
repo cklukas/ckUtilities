@@ -23,8 +23,14 @@ ck-files [LEFT_DIRECTORY [RIGHT_DIRECTORY]]
 ```
 
 Without arguments, both panes start from the current directory. Use
-`--help` (or `-h`) for the command-line synopsis. The application does not
-execute files or provide an embedded shell.
+`--help` (or `-h`) for the command-line synopsis. Under the **Tools** menu,
+`ck-files` also provides integrated recursive search (**Alt+F7**), directory
+tree & sizes (**Alt+T**), file diff and reviewed directory synchronization,
+ordinary archive browsing/creation/extraction (ZIP, TAR, TAR.GZ), an embedded
+syntax-aware editor (**Ctrl+E**), an interactive embedded terminal (**Ctrl+O**),
+direct-argv command execution and user menus, remote SFTP/SMB browsing, and
+`CKARV01` volume-archive inspection and verified restore. Shell commands are
+never used as a fallback for native file operations.
 
 On Linux and macOS, put `--osc52-clipboard` before the directory arguments
 when your terminal permits OSC 52 clipboard writes. Without the option,

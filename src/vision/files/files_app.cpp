@@ -1,8 +1,16 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
-#include "files_settings_service.hpp"
+#include "files_compare_sync_service.hpp"
+#include "files_embedded_editor.hpp"
 #include "files_location_dialog.hpp"
+#include "files_native_io_helpers.hpp"
+#include "files_ordinary_archive.hpp"
+#include "files_remote_provider.hpp"
+#include "files_search_service.hpp"
+#include "files_settings_service.hpp"
+#include "files_terminal_session.hpp"
+#include "files_volume_archive_restore.hpp"
 #include "files_volume_source.hpp"
 #include "ck/vision/keymap.hpp"
 #include "name_mapping.hpp"
@@ -11,9 +19,12 @@
 #include <cvision/ui/layout.hpp>
 #include <cvision/widgets/command_palette.hpp>
 #include <cvision/widgets/dialog.hpp>
+#include <cvision/widgets/editor_document.hpp>
 #include <cvision/widgets/list_view.hpp>
 #include <cvision/widgets/mnemonic.hpp>
 #include <cvision/widgets/splitter.hpp>
+#include <cvision/widgets/terminal_view.hpp>
+#include <cvision/widgets/text_editor.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
 #include <cerrno>
@@ -555,6 +566,22 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_cleanup_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> mark_pattern_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> parity_dialog;
+    ckv::widgets::Window *parity_report_window = nullptr;
+    std::weak_ptr<void> parity_report_lifetime;
+    struct EmbeddedEditorInstance final {
+        ckv::widgets::Window *window = nullptr;
+        std::weak_ptr<void> lifetime;
+        std::shared_ptr<ckv::widgets::EditorDocument> document;
+        FilesDocumentSnapshot snapshot;
+        bool allow_discard_close = false;
+    };
+    std::unique_ptr<ckv::widgets::SyntaxProfileRegistry> syntax_registry;
+    std::vector<EmbeddedEditorInstance> embedded_editors;
+    ckv::widgets::Window *embedded_terminal_window = nullptr;
+    std::weak_ptr<void> embedded_terminal_lifetime;
+    FilesCommandHistory command_history;
+    std::uint64_t external_writer_epoch = 0;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> tree_copy_dialog;
     ckv::widgets::Window *tree_copy_window = nullptr;
@@ -652,6 +679,21 @@ struct FilesApp::State {
     ckv::ui::CommandId compare_directories_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId mark_pattern_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId unmark_pattern_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId search_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId directory_tree_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId sync_directories_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId diff_files_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_browse_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_create_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_extract_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId edit_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId new_edit_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId terminal_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId run_command_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId user_menu_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId connect_remote_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId inspect_volume_archive_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId restore_volume_archive_id = ckv::ui::kInvalidCommand;
     bool operation_recovery_action_pending = false;
     std::string operation_recovery_action_status;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
@@ -815,6 +857,36 @@ struct FilesApp::State {
                                   [this] { return availability("ck.files.mark_pattern").enabled; });
             unmark_pattern_id = own("ck.files.unmark_pattern", [this] { show_mark_pattern(false); },
                                     [this] { return availability("ck.files.unmark_pattern").enabled; });
+            search_id = own("ck.files.search", [this] { show_search(); },
+                            [this] { return availability("ck.files.search").enabled; });
+            directory_tree_id = own("ck.files.directory_tree", [this] { show_directory_tree(); },
+                                    [this] { return availability("ck.files.directory_tree").enabled; });
+            sync_directories_id = own("ck.files.sync_directories", [this] { show_sync_directories(); },
+                                      [this] { return availability("ck.files.sync_directories").enabled; });
+            diff_files_id = own("ck.files.diff_files", [this] { show_diff_files(); },
+                                [this] { return availability("ck.files.diff_files").enabled; });
+            archive_browse_id = own("ck.files.archive_browse", [this] { show_archive_browse(); },
+                                    [this] { return availability("ck.files.archive_browse").enabled; });
+            archive_create_id = own("ck.files.archive_create", [this] { show_archive_create(); },
+                                    [this] { return availability("ck.files.archive_create").enabled; });
+            archive_extract_id = own("ck.files.archive_extract", [this] { show_archive_extract(); },
+                                     [this] { return availability("ck.files.archive_extract").enabled; });
+            edit_id = own("ck.files.edit", [this] { show_embedded_editor(false); },
+                          [this] { return availability("ck.files.edit").enabled; });
+            new_edit_id = own("ck.files.new_edit", [this] { show_embedded_editor(true); },
+                              [this] { return availability("ck.files.new_edit").enabled; });
+            terminal_id = own("ck.files.terminal", [this] { show_embedded_terminal(); },
+                              [this] { return availability("ck.files.terminal").enabled; });
+            run_command_id = own("ck.files.run_command", [this] { show_run_command(); },
+                                 [this] { return availability("ck.files.run_command").enabled; });
+            user_menu_id = own("ck.files.user_menu", [this] { show_user_menu(); },
+                               [this] { return availability("ck.files.user_menu").enabled; });
+            connect_remote_id = own("ck.files.connect_remote", [this] { show_connect_remote(); },
+                                    [this] { return availability("ck.files.connect_remote").enabled; });
+            inspect_volume_archive_id = own("ck.files.inspect_volume_archive", [this] { show_inspect_volume_archive(); },
+                                            [this] { return availability("ck.files.inspect_volume_archive").enabled; });
+            restore_volume_archive_id = own("ck.files.restore_volume_archive", [this] { show_restore_volume_archive(); },
+                                            [this] { return availability("ck.files.restore_volume_archive").enabled; });
             const auto visible_ready = [this] { return availability("ck.files.mark_visible").enabled; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -902,6 +974,17 @@ struct FilesApp::State {
                      item(clear, "&Clear all marks (including hidden)"), item(confirm_focus, "Use current &row"),
                      item(range, "&Set range start"),
                      item(mark_range, "Mark th&rough cursor"), item(unmark_range, "Unmark through curs&or")}},
+                ckv::widgets::MenuBarItem{
+                    "&Tools",
+                    {item(search_id, "Search &files..."), item(directory_tree_id, "Directory &tree / sizes..."),
+                     item(diff_files_id, "&Diff selected files..."), item(sync_directories_id, "S&ynchronize directories..."),
+                     item(archive_browse_id, "Browse &archive..."), item(archive_create_id, "Create archi&ve..."),
+                     item(archive_extract_id, "E&xtract archive..."),
+                     item(edit_id, "&Edit file..."), item(new_edit_id, "New &text document..."),
+                     item(terminal_id, "Embedded &terminal"), item(run_command_id, "Run &command..."),
+                     item(user_menu_id, "User &menu..."), item(connect_remote_id, "Connect &remote (SFTP/SMB)..."),
+                     item(inspect_volume_archive_id, "Inspect &volume archive..."),
+                     item(restore_volume_archive_id, "Restore volume arc&hive...")}},
                 ckv::widgets::MenuBarItem{
                     "&View", {item(options_id, "View &options..."),
                               item(application.commands().standard().command_palette, "&Commands...")}}};
@@ -1248,6 +1331,7 @@ struct FilesApp::State {
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
                (mark_pattern_dialog && !mark_pattern_dialog->completed()) ||
+               (parity_dialog && !parity_dialog->completed()) ||
                archive_recovery_open() ||
                reconciliation_overlap_open() ||
                (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) ||
@@ -1567,6 +1651,49 @@ struct FilesApp::State {
                 return unavailable("Pattern selection unavailable: a dialog is open");
             if (!ready(active) || panes[active].volume_view)
                 return unavailable("Pattern selection unavailable: active pane is not ready");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.search" || command == "ck.files.directory_tree" ||
+            command == "ck.files.terminal" || command == "ck.files.run_command" ||
+            command == "ck.files.user_menu" || command == "ck.files.new_edit" ||
+            command == "ck.files.connect_remote") {
+            if (modal_pending())
+                return unavailable("Command unavailable: a dialog is open");
+            if (command != "ck.files.connect_remote" &&
+                (!ready(active) || panes[active].volume_view || !panes[active].active))
+                return unavailable("Command unavailable: active pane has no folder location");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.sync_directories") {
+            if (modal_pending())
+                return unavailable("Synchronize unavailable: a dialog is open");
+            if (!ready(0) || !ready(1) || panes[0].volume_view || panes[1].volume_view ||
+                !panes[0].active || !panes[1].active)
+                return unavailable("Synchronize unavailable: both panes need active folder locations");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.diff_files" || command == "ck.files.edit" ||
+            command == "ck.files.archive_browse" || command == "ck.files.archive_extract" ||
+            command == "ck.files.inspect_volume_archive" || command == "ck.files.restore_volume_archive") {
+            if (modal_pending())
+                return unavailable("Command unavailable: a dialog is open");
+            if (!ready(active) || panes[active].volume_view || !panes[active].active)
+                return unavailable("Command unavailable: active pane is not ready");
+            if (panes[active].model.cursor_kind() != ck::files::ObjectKind::RegularFile)
+                return unavailable("Command unavailable: select a regular file");
+            if ((command == "ck.files.archive_extract" || command == "ck.files.restore_volume_archive") &&
+                (!ready(1 - active) || panes[1 - active].volume_view || !panes[1 - active].active))
+                return unavailable("Command unavailable: opposite pane needs a destination folder");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.archive_create") {
+            if (modal_pending())
+                return unavailable("Create archive unavailable: a dialog is open");
+            if (!ready(active) || !ready(1 - active) || panes[active].volume_view ||
+                panes[1 - active].volume_view || !panes[active].active || !panes[1 - active].active)
+                return unavailable("Create archive unavailable: both panes need active folders");
+            if (!panes[active].model.target())
+                return unavailable("Create archive unavailable: select an entry to archive");
             return FilesCommandAvailability::available();
         }
         if (command == "ck.files.resume_operation_recovery" ||
@@ -3148,6 +3275,661 @@ struct FilesApp::State {
             return true;
         panes[active].queued_marks = std::move(cmds);
         return drain_queued_marks(active);
+    }
+    std::optional<ck::files::NativeAbsolutePath> pane_absolute_path(std::size_t pane_idx) const {
+        if (!panes[pane_idx].active)
+            return std::nullopt;
+        ck::files::NativeAbsolutePath cur = panes[pane_idx].active->root_address();
+        for (const auto &comp : panes[pane_idx].active->components()) {
+            auto next = cur.child_address(comp);
+            if (!next.value())
+                return std::nullopt;
+            cur = *next.value();
+        }
+        return cur;
+    }
+    std::optional<ck::files::NativeAbsolutePath> selected_child_path(std::size_t pane_idx) const {
+        const auto base = pane_absolute_path(pane_idx);
+        if (!base)
+            return std::nullopt;
+        const auto row_target = panes[pane_idx].model.target();
+        if (!row_target)
+            return std::nullopt;
+        const auto *rows = panes[pane_idx].model.visible_rows();
+        if (!rows)
+            return std::nullopt;
+        for (const auto &row : *rows) {
+            if (row.id == row_target->row) {
+                auto nn = detail::native_name_from_utf8(base->encoding(), row.display_name);
+                if (!nn)
+                    return std::nullopt;
+                auto child = base->child_address(*nn);
+                if (child.value())
+                    return *child.value();
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+    void show_parity_report(std::string title, std::string body) {
+        using namespace ckv::widgets;
+        if (parity_report_window && !parity_report_lifetime.expired())
+            parity_report_window->close();
+        auto win = std::make_unique<Window>(std::move(title));
+        auto content = std::make_unique<TextView>();
+        content->set_text(std::move(body));
+        win->set_content(std::move(content));
+        const auto desk = shell->desktop().bounds();
+        const int w = std::max(44, std::min(96, desk.width - 4));
+        const int h = std::max(12, std::min(28, desk.height - 4));
+        win->set_bounds({(desk.width - w) / 2, (desk.height - h) / 2, w, h});
+        parity_report_window = win.get();
+        parity_report_lifetime = win->lifetime_token();
+        shell->desktop().add_window(std::move(win));
+    }
+    bool show_search() {
+        if (!availability("ck.files.search").enabled)
+            return false;
+        ckv::widgets::DialogDescriptor desc;
+        desc.title = "Search files (CP-07)";
+        desc.fields = {
+            ckv::widgets::FieldDescriptor{.label = "&Name pattern (glob):"},
+            ckv::widgets::FieldDescriptor{.label = "&Content text (optional):"}};
+        desc.buttons = {
+            {"&Search", ckv::widgets::ButtonRole::Accept, {}},
+            {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        const std::size_t pane_idx = active;
+        const auto root_opt = pane_absolute_path(pane_idx);
+        if (!root_opt)
+            return false;
+        const auto root = *root_opt;
+        parity_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(desc), application, shell->desktop()));
+        parity_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane_idx, root](const ckv::widgets::DialogResult &res) {
+            if (weak.expired())
+                return;
+            std::string name_pat;
+            std::string content_pat;
+            if (res.accepted && !res.values.empty())
+                name_pat = res.values[0];
+            if (res.accepted && res.values.size() > 1)
+                content_pat = res.values[1];
+            parity_dialog.reset();
+            if (!res.accepted) {
+                labels();
+                return;
+            }
+            FilesSearchQuery query;
+            query.root = root;
+            query.name_pattern = name_pat;
+            query.name_mode = name_pat.empty() ? FilesSearchNameMode::None : FilesSearchNameMode::Glob;
+            query.content_query = content_pat;
+            const auto sr = run_files_search(query);
+            std::ostringstream out;
+            out << "Root: " << root.display_text() << "\n"
+                << "Matches: " << sr.hits.size()
+                << " (scanned " << sr.scanned_entries << " entries in "
+                << sr.scanned_directories << " directories)\n";
+            if (!sr.error_message.empty())
+                out << "Error: " << sr.error_message << "\n";
+            if (sr.truncated)
+                out << "(Result list truncated at safety limit)\n";
+            out << "\n";
+            const std::size_t limit = std::min<std::size_t>(sr.hits.size(), 200);
+            for (std::size_t idx = 0; idx < limit; ++idx) {
+                out << sr.hits[idx].relative_display << " (" << sr.hits[idx].logical_size << " B)";
+                if (sr.hits[idx].content_match_line)
+                    out << " [L" << *sr.hits[idx].content_match_line << ": " << sr.hits[idx].content_match_preview << "]";
+                out << "\n";
+            }
+            if (!sr.hits.empty() && sr.hits.front().parent_directory)
+                navigate(pane_idx, *sr.hits.front().parent_directory);
+            show_parity_report("Search results", out.str());
+            labels();
+        });
+        return true;
+    }
+    bool show_directory_tree() {
+        if (!availability("ck.files.directory_tree").enabled)
+            return false;
+        const auto root_opt = pane_absolute_path(active);
+        if (!root_opt)
+            return false;
+        const auto &root = *root_opt;
+        const auto tree = build_files_directory_tree(root, 512, 8);
+        std::ostringstream out;
+        out << "Directory tree & sizes (ck_du_core): " << root.display_text() << "\n\n";
+        if (!tree.error_message.empty())
+            out << "Error: " << tree.error_message << "\n";
+        for (const auto &node : tree.nodes) {
+            out << std::string(node.depth * 2, ' ') << node.display_name
+                << "  [" << node.logical_bytes << " B, " << node.file_count << " files]\n";
+        }
+        show_parity_report("Directory tree / sizes", out.str());
+        labels();
+        return true;
+    }
+    bool show_sync_directories() {
+        if (!availability("ck.files.sync_directories").enabled)
+            return false;
+        const auto left_opt = pane_absolute_path(0);
+        const auto right_opt = pane_absolute_path(1);
+        if (!left_opt || !right_opt)
+            return false;
+        const auto &left_loc = *left_opt;
+        const auto &right_loc = *right_opt;
+        FilesSyncOptions opts;
+        opts.compare_mode = FilesCompareMode::ThoroughContent;
+        opts.direction = FilesSyncDirection::TwoWayCopyOnly;
+        const auto plan = build_files_sync_plan(left_loc, right_loc, opts);
+        std::ostringstream out;
+        out << "Directory Compare & Reviewed Sync (Two-Way Copy-Only; no inferred deletions)\n"
+            << "Left:  " << left_loc.display_text() << "\n"
+            << "Right: " << right_loc.display_text() << "\n"
+            << "Identical: " << plan.identical_count
+            << " | Planned copies: " << plan.action_count
+            << " | Conflicts requiring review: " << plan.conflict_count << "\n\n";
+        if (!plan.error_message.empty())
+            out << "Error: " << plan.error_message << "\n";
+        const std::size_t shown = std::min<std::size_t>(plan.items.size(), 200);
+        for (std::size_t idx = 0; idx < shown; ++idx) {
+            const auto &it = plan.items[idx];
+            if (it.relation == FilesCompareRelation::Identical)
+                continue;
+            const char *act = "None";
+            switch (it.proposed_action) {
+                case FilesSyncAction::CopyLeftToRight: act = "Copy L->R"; break;
+                case FilesSyncAction::CopyRightToLeft: act = "Copy R->L"; break;
+                case FilesSyncAction::CreateDirRight: act = "Mkdir R"; break;
+                case FilesSyncAction::CreateDirLeft: act = "Mkdir L"; break;
+                case FilesSyncAction::ReviewConflict: act = "CONFLICT (preserved)"; break;
+                default: break;
+            }
+            out << "[" << act << "] " << it.relative_key;
+            if (!it.diagnostic.empty())
+                out << " — " << it.diagnostic;
+            out << "\n";
+        }
+        show_parity_report("Synchronize directories (preview)", out.str());
+        labels();
+        return true;
+    }
+    bool show_diff_files() {
+        if (!availability("ck.files.diff_files").enabled)
+            return false;
+        const auto left_file = selected_child_path(active);
+        const auto right_file = selected_child_path(1 - active);
+        if (!left_file || !right_file) {
+            show_parity_report("Diff files", "Select a regular file in both panes to diff.");
+            return false;
+        }
+        const auto diff = diff_native_files(*left_file, *right_file);
+        std::ostringstream out;
+        out << "Left:  " << left_file->display_text() << " (" << diff.left_size << " B)\n"
+            << "Right: " << right_file->display_text() << " (" << diff.right_size << " B)\n\n";
+        if (!diff.error_message.empty()) {
+            out << "Error: " << diff.error_message << "\n";
+        } else if (diff.identical) {
+            out << "Files are byte-for-byte identical.\n";
+        } else if (diff.binary) {
+            out << "Binary diff (" << diff.binary_diffs.size() << " differing bytes shown):\n";
+            for (const auto &bd : diff.binary_diffs) {
+                out << "  0x" << std::hex << bd.offset << std::dec << ": ";
+                if (bd.left_byte) out << std::hex << static_cast<unsigned>(*bd.left_byte) << std::dec;
+                else out << "--";
+                out << " vs ";
+                if (bd.right_byte) out << std::hex << static_cast<unsigned>(*bd.right_byte) << std::dec;
+                else out << "--";
+                out << "\n";
+            }
+        } else {
+            for (const auto &dl : diff.text_lines) {
+                const char prefix = dl.kind == FilesDiffLineKind::Removed ? '-' :
+                                    (dl.kind == FilesDiffLineKind::Added ? '+' : ' ');
+                out << prefix << dl.text << "\n";
+            }
+        }
+        show_parity_report("File diff", out.str());
+        labels();
+        return true;
+    }
+    bool show_archive_browse() {
+        if (!availability("ck.files.archive_browse").enabled)
+            return false;
+        const auto arc = selected_child_path(active);
+        if (!arc)
+            return false;
+        const auto cat = list_ordinary_archive(*arc);
+        std::ostringstream out;
+        out << "Archive: " << arc->display_text() << "\n";
+        if (!cat.error_message.empty()) {
+            out << "Error: " << cat.error_message << "\n";
+        } else {
+            out << "Entries: " << cat.entries.size()
+                << " | Total uncompressed: " << cat.total_uncompressed_bytes << " B\n";
+            if (cat.has_unsafe_entries)
+                out << "WARNING: Archive contains unsafe paths/links (blocked on extract)\n";
+            if (cat.has_collisions)
+                out << "WARNING: Archive contains colliding member names\n";
+            out << "\n";
+            const std::size_t shown = std::min<std::size_t>(cat.entries.size(), 250);
+            for (std::size_t idx = 0; idx < shown; ++idx) {
+                const auto &e = cat.entries[idx];
+                out << (e.kind == OrdinaryArchiveEntryKind::Directory ? "[DIR]  " : "[FILE] ")
+                    << e.path << " (" << e.uncompressed_size << " B)";
+                if (!e.safe_path)
+                    out << " [UNSAFE: " << e.safety_warning << "]";
+                out << "\n";
+            }
+        }
+        show_parity_report("Archive browser", out.str());
+        labels();
+        return true;
+    }
+    bool show_archive_create() {
+        if (!availability("ck.files.archive_create").enabled)
+            return false;
+        const auto src = selected_child_path(active);
+        if (!src)
+            return false;
+        const auto dst_opt = pane_absolute_path(1 - active);
+        if (!dst_opt)
+            return false;
+        const auto &dst_dir = *dst_opt;
+        const auto split = detail::split_native_path(*src);
+        if (!split)
+            return false;
+        const std::string arc_name_str = split->leaf.display_name() + ".zip";
+        const auto arc_nn = detail::native_name_from_utf8(dst_dir.encoding(), arc_name_str);
+        if (!arc_nn)
+            return false;
+        const auto arc_path = dst_dir.child_address(*arc_nn);
+        if (!arc_path.value())
+            return false;
+        OrdinaryArchiveInputItem input;
+        input.archive_path = split->leaf.display_name();
+        input.source_path = *src;
+        input.is_directory = (panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory);
+        const std::array<OrdinaryArchiveInputItem, 1> items{input};
+        const auto res = create_ordinary_archive(*arc_path.value(), OrdinaryArchiveFormat::Zip, items);
+        if (res.ok)
+            refresh(1 - active);
+        std::ostringstream out;
+        out << "Create archive: " << arc_path.value()->display_text() << "\n"
+            << (res.ok ? "Status: Created successfully\n" : ("Error: " + res.error_message + "\n"))
+            << "Entries written: " << res.entries_written << " (" << res.archive_bytes << " B)\n";
+        show_parity_report("Create archive", out.str());
+        labels();
+        return res.ok;
+    }
+    bool show_archive_extract() {
+        if (!availability("ck.files.archive_extract").enabled)
+            return false;
+        const auto arc = selected_child_path(active);
+        if (!arc)
+            return false;
+        const auto dst_opt = pane_absolute_path(1 - active);
+        if (!dst_opt)
+            return false;
+        const auto &dst_dir = *dst_opt;
+        const auto res = extract_ordinary_archive(*arc, dst_dir);
+        if (res.extracted_files > 0 || res.extracted_directories > 0)
+            refresh(1 - active);
+        std::ostringstream out;
+        out << "Extract archive: " << arc->display_text() << "\n"
+            << "Destination: " << dst_dir.display_text() << "\n"
+            << "Extracted files: " << res.extracted_files
+            << " | Directories: " << res.extracted_directories
+            << " | Conflicts skipped: " << res.skipped_conflicts
+            << " | Unsafe rejected: " << res.rejected_unsafe << "\n";
+        if (!res.error_message.empty())
+            out << "Error: " << res.error_message << "\n";
+        show_parity_report("Extract archive", out.str());
+        labels();
+        return res.error_message.empty();
+    }
+    void prune_embedded_editors() {
+        embedded_editors.erase(
+            std::remove_if(embedded_editors.begin(), embedded_editors.end(),
+                           [](const EmbeddedEditorInstance &ed) {
+                               return !ed.window || ed.lifetime.expired();
+                           }),
+            embedded_editors.end());
+    }
+    bool has_dirty_embedded_editors() const {
+        for (const auto &ed : embedded_editors) {
+            if (ed.window && !ed.lifetime.expired() && ed.document && ed.document->modified())
+                return true;
+        }
+        return false;
+    }
+    bool save_embedded_editor(std::size_t index, bool force_overwrite) {
+        prune_embedded_editors();
+        if (index >= embedded_editors.size())
+            return false;
+        auto &ed = embedded_editors[index];
+        if (!ed.document)
+            return false;
+        const auto saved = save_files_editor_document(
+            ed.snapshot, ed.document->text(), force_overwrite);
+        if (saved.status == FilesSaveStatus::Saved) {
+            ed.snapshot = saved.updated_snapshot;
+            ed.document->mark_clean();
+            ++external_writer_epoch;
+            refresh(active);
+            labels();
+            return true;
+        }
+        show_parity_report("Save failed", saved.diagnostic);
+        labels();
+        return false;
+    }
+    bool show_embedded_editor(bool new_document) {
+        if (!availability(new_document ? "ck.files.new_edit" : "ck.files.edit").enabled)
+            return false;
+        prune_embedded_editors();
+        if (!syntax_registry)
+            syntax_registry = make_files_syntax_registry();
+        auto doc = std::make_shared<ckv::widgets::EditorDocument>();
+        FilesDocumentSnapshot snap;
+        std::string title = "Untitled";
+        if (!new_document) {
+            const auto file_path = selected_child_path(active);
+            if (!file_path)
+                return false;
+            const auto opened = open_files_editor_document(*file_path);
+            if (!opened.ok) {
+                show_parity_report("Editor", "Unable to open file: " + opened.error_message);
+                return false;
+            }
+            doc->set_text(opened.text);
+            doc->mark_clean();
+            snap = opened.snapshot;
+            const auto split = detail::split_native_path(*file_path);
+            title = split ? split->leaf.display_name() : file_path->display_text();
+        } else {
+            doc->mark_clean();
+        }
+        using namespace ckv::widgets;
+        auto win = std::make_unique<Window>("Edit: " + title);
+        auto ed = std::make_unique<TextEditor>(doc, syntax_registry.get());
+        ed->set_file_name(title);
+        ed->set_show_line_numbers(true);
+        win->set_content(std::move(ed));
+        const auto desk = shell->desktop().bounds();
+        const int w = std::max(50, std::min(100, desk.width - 4));
+        const int h = std::max(14, std::min(30, desk.height - 4));
+        win->set_bounds({(desk.width - w) / 2, (desk.height - h) / 2, w, h});
+
+        Window *raw_win = win.get();
+        auto win_life = win->lifetime_token();
+        win->close_request = [this, weak = std::weak_ptr<void>(lifetime), raw_win, win_life, title]() -> bool {
+            if (weak.expired() || win_life.expired())
+                return true;
+            auto it = std::find_if(embedded_editors.begin(), embedded_editors.end(),
+                                   [raw_win](const EmbeddedEditorInstance &e) { return e.window == raw_win; });
+            if (it == embedded_editors.end() || it->allow_discard_close ||
+                !it->document || !it->document->modified())
+                return true;
+            if (parity_dialog && !parity_dialog->completed())
+                return false;
+            DialogDescriptor desc;
+            desc.title = "Unsaved changes: " + title;
+            desc.fields = {FieldDescriptor{.label = "Document has unsaved edits. Discard changes and close?",
+                                           .kind = FieldKind::Note}};
+            desc.buttons = {
+                {"&Stay", ButtonRole::Dismiss, {}},
+                {"&Discard and close", ButtonRole::Accept, {}}};
+            parity_dialog.emplace(present_modal_dialog(std::move(desc), application, shell->desktop()));
+            parity_dialog->set_completion_handler(
+                [this, weak, raw_win, win_life](const DialogResult &res) {
+                if (weak.expired())
+                    return;
+                parity_dialog.reset();
+                if (res.accepted && !win_life.expired()) {
+                    for (auto &e : embedded_editors) {
+                        if (e.window == raw_win) {
+                            e.allow_discard_close = true;
+                            break;
+                        }
+                    }
+                    raw_win->close();
+                }
+                labels();
+            });
+            return false; // Veto close until user confirms.
+        };
+
+        EmbeddedEditorInstance inst;
+        inst.window = raw_win;
+        inst.lifetime = win_life;
+        inst.document = doc;
+        inst.snapshot = std::move(snap);
+        embedded_editors.push_back(std::move(inst));
+        shell->desktop().add_window(std::move(win));
+        labels();
+        return true;
+    }
+    bool show_embedded_terminal() {
+        if (!availability("ck.files.terminal").enabled)
+            return false;
+        using namespace ckv::widgets;
+        if (embedded_terminal_window && !embedded_terminal_lifetime.expired()) {
+            if (auto *stop = ckv::ui::Application::first_focus_stop(*embedded_terminal_window))
+                application.set_focus(stop);
+            return true;
+        }
+        const auto cwd_opt = pane_absolute_path(active);
+        const std::optional<std::string> cwd_host = cwd_opt ? detail::host_path_utf8(*cwd_opt) : std::nullopt;
+        const std::string cwd = cwd_host
+            ? *cwd_host
+            : (cwd_opt ? cwd_opt->display_text() : std::string("/"));
+        auto spec = build_files_interactive_terminal_spec(cwd);
+        auto &subsession = application.launch_terminal_subsession(std::move(spec));
+        auto win = std::make_unique<Window>("Terminal: " + cwd);
+        auto tview = std::make_unique<TerminalView>(subsession);
+        tview->on_parent_escape = [this, weak = std::weak_ptr<void>(lifetime)] {
+            if (weak.expired())
+                return;
+            if (surfaces[active] && surfaces[active]->grid)
+                application.set_focus(surfaces[active]->grid);
+            ++external_writer_epoch;
+            refresh(active);
+        };
+        win->set_content(std::move(tview));
+        const auto desk = shell->desktop().bounds();
+        const int w = std::max(50, std::min(100, desk.width - 4));
+        const int h = std::max(14, std::min(28, desk.height - 4));
+        win->set_bounds({(desk.width - w) / 2, (desk.height - h) / 2, w, h});
+        embedded_terminal_window = win.get();
+        embedded_terminal_lifetime = win->lifetime_token();
+        ++external_writer_epoch;
+        shell->desktop().add_window(std::move(win));
+        labels();
+        return true;
+    }
+    bool show_run_command() {
+        if (!availability("ck.files.run_command").enabled)
+            return false;
+        ckv::widgets::DialogDescriptor desc;
+        desc.title = "Run direct command (argv, no shell)";
+        desc.fields = {ckv::widgets::FieldDescriptor{.label = "&Command (executable arg1 ...):"}};
+        desc.buttons = {
+            {"&Run", ckv::widgets::ButtonRole::Accept, {}},
+            {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        const std::size_t pane_idx = active;
+        const auto cwd_opt = pane_absolute_path(pane_idx);
+        const std::optional<std::string> cwd_host = cwd_opt ? detail::host_path_utf8(*cwd_opt) : std::nullopt;
+        const std::string cwd = cwd_host
+            ? *cwd_host
+            : (cwd_opt ? cwd_opt->display_text() : std::string("/"));
+        parity_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(desc), application, shell->desktop()));
+        parity_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane_idx, cwd](const ckv::widgets::DialogResult &res) {
+            if (weak.expired())
+                return;
+            std::string cmd;
+            if (res.accepted && !res.values.empty())
+                cmd = res.values[0];
+            parity_dialog.reset();
+            if (res.accepted && !cmd.empty()) {
+                command_history.record(cmd);
+                const auto expanded = parse_files_direct_command(cmd, cwd);
+                const auto run_res = execute_files_command(expanded, application.clock());
+                ++external_writer_epoch;
+                refresh(pane_idx);
+                std::ostringstream out;
+                out << "Command: " << expanded.review_preview << "\n"
+                    << "Success: " << (run_res.successful() ? "yes" : "no") << "\n";
+                if (!run_res.diagnostic.empty())
+                    out << "Diagnostic: " << run_res.diagnostic << "\n";
+                if (!run_res.stdout_capture.bytes.empty())
+                    out << "\n--- stdout ---\n" << run_res.stdout_capture.bytes << "\n";
+                if (!run_res.stderr_capture.bytes.empty())
+                    out << "\n--- stderr ---\n" << run_res.stderr_capture.bytes << "\n";
+                show_parity_report("Command output", out.str());
+            }
+            labels();
+        });
+        return true;
+    }
+    bool show_user_menu() {
+        if (!availability("ck.files.user_menu").enabled)
+            return false;
+        const auto menu = default_files_user_menu();
+        FilesCommandPlaceholderContext ctx;
+        if (const auto ap = pane_absolute_path(active))
+            ctx.active_directory = ap->display_text();
+        if (const auto op = pane_absolute_path(1 - active))
+            ctx.opposite_directory = op->display_text();
+        if (const auto sel = selected_child_path(active)) {
+            ctx.current_path = sel->display_text();
+            if (const auto sp = detail::split_native_path(*sel))
+                ctx.current_name = sp->leaf.display_name();
+        }
+        std::ostringstream out;
+        out << "User Menu (reviewed placeholder previews — direct argv safe):\n\n";
+        for (std::size_t idx = 0; idx < menu.size(); ++idx) {
+            const auto exp = expand_files_user_menu_entry(menu[idx], ctx);
+            out << (idx + 1) << ". " << menu[idx].label << "\n   "
+                << (exp.valid ? exp.review_preview : ("(unavailable: " + exp.error_message + ")"))
+                << "\n\n";
+        }
+        show_parity_report("User menu", out.str());
+        labels();
+        return true;
+    }
+    bool show_connect_remote() {
+        if (!availability("ck.files.connect_remote").enabled)
+            return false;
+        ckv::widgets::DialogDescriptor desc;
+        desc.title = "Connect remote location (SFTP / SMB)";
+        desc.fields = {ckv::widgets::FieldDescriptor{.label = "&URI (sftp://user@host/path or smb://host/share):"}};
+        desc.buttons = {
+            {"&Connect", ckv::widgets::ButtonRole::Accept, {}},
+            {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        parity_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(desc), application, shell->desktop()));
+        parity_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &res) {
+            if (weak.expired())
+                return;
+            std::string raw_uri;
+            if (res.accepted && !res.values.empty())
+                raw_uri = res.values[0];
+            parity_dialog.reset();
+            if (res.accepted && !raw_uri.empty()) {
+                const auto parsed = parse_files_remote_uri(raw_uri);
+                std::ostringstream out;
+                out << "Target: " << parsed.redacted_display() << "\n";
+                if (!parsed.valid) {
+                    out << "Error: " << parsed.error_message << "\n";
+                } else {
+                    const auto caps = provider_capabilities_for(parsed.kind);
+                    out << "Provider: " << caps.transport_summary << "\n";
+                    std::unique_ptr<FilesRemoteTransport> transport =
+                        parsed.kind == FilesProviderKind::Sftp
+                            ? make_sftp_remote_transport(application.clock())
+                            : make_smb_mounted_transport();
+                    FilesRemoteSession session(std::move(transport), FilesHostKeyPolicy::StrictVerify);
+                    const auto listed = session.list(parsed);
+                    if (listed.status == FilesRemoteStatus::Ok) {
+                        out << "Entries: " << listed.entries.size() << "\n\n";
+                        for (const auto &e : listed.entries)
+                            out << (e.is_directory ? "[DIR]  " : "[FILE] ") << e.name
+                                << " (" << e.size << " B)\n";
+                    } else {
+                        out << "Status: " << redact_remote_secrets(listed.diagnostic) << "\n";
+                    }
+                }
+                show_parity_report("Remote location", out.str());
+            }
+            labels();
+        });
+        return true;
+    }
+    bool show_inspect_volume_archive() {
+        if (!availability("ck.files.inspect_volume_archive").enabled)
+            return false;
+        const auto arc = selected_child_path(active);
+        if (!arc)
+            return false;
+        const auto info = inspect_volume_archive_file(*arc);
+        std::ostringstream out;
+        out << "CKARV01 Volume Archive Inspection: " << arc->display_text() << "\n";
+        if (!info.valid) {
+            out << "Error: " << info.error_message << "\n";
+        } else {
+            out << "Format version: " << info.format_version
+                << " | Source: " << info.source.name << " (" << info.source.filesystem << ")\n"
+                << "Entries: " << info.entries.size()
+                << " (dirs=" << info.directory_count
+                << ", files=" << info.regular_file_count
+                << ", sparse=" << info.sparse_file_count
+                << ", links=" << info.symlink_count
+                << ", hardlinks=" << info.hard_link_count << ")\n"
+                << "Recorded losses: " << info.losses.size() << "\n";
+        }
+        show_parity_report("Volume archive inspection", out.str());
+        labels();
+        return info.valid;
+    }
+    bool show_restore_volume_archive() {
+        if (!availability("ck.files.restore_volume_archive").enabled)
+            return false;
+        const auto arc = selected_child_path(active);
+        if (!arc)
+            return false;
+        const auto dst_opt = pane_absolute_path(1 - active);
+        if (!dst_opt)
+            return false;
+        const auto &dst_dir = *dst_opt;
+        const auto plan = plan_volume_archive_restore(*arc, dst_dir);
+        std::ostringstream out;
+        out << "CKARV01 Volume Archive Verified Restore\n"
+            << "Archive: " << arc->display_text() << "\n"
+            << "Destination: " << dst_dir.display_text() << "\n";
+        if (!plan.valid) {
+            out << "Refused: " << plan.error_message << "\n";
+            show_parity_report("Volume archive restore", out.str());
+            return false;
+        }
+        const auto res = restore_volume_archive(plan, false);
+        if (res.restored_files > 0 || res.restored_directories > 0)
+            refresh(1 - active);
+        out << "Status: " << (res.ok ? "Verified restore complete" : ("Failed: " + res.error_message)) << "\n"
+            << "Restored files: " << res.restored_files
+            << " (sparse=" << res.restored_sparse_files << ")"
+            << " | Dirs: " << res.restored_directories
+            << " | Hard links: " << res.restored_hard_links
+            << " | Symlinks: " << res.restored_symlinks
+            << " | Conflicts skipped: " << res.skipped_conflicts
+            << " | Verified bytes: " << res.verified_bytes << "\n";
+        show_parity_report("Volume archive restore", out.str());
+        labels();
+        return res.ok;
     }
     bool change_view(std::size_t i, ck::files::PaneView view) {
         if (!ready(i) || !ck::files::valid_pane_order({view.sort, view.descending, view.folders_first}) ||
@@ -5310,13 +6092,23 @@ struct FilesApp::State {
                 tree_copy_window->close();
             return;
         }
+        if (parity_dialog && !parity_dialog->completed()) {
+            if (auto *active_window = shell->desktop().active_window())
+                active_window->close();
+            return;
+        }
+        if (parity_report_window && !parity_report_lifetime.expired()) {
+            parity_report_window->close();
+            return;
+        }
+        const bool dirty_editors = has_dirty_embedded_editors();
         const bool operation_active = operation_execution_request || volume_archive_execution_request ||
             volume_archive_recovery_cleanup_request || operation_recovery_cleanup_request ||
             panes[0].mutating || panes[1].mutating;
         const bool planning_active = operation_planning_request || volume_archive_planning_request;
         const bool completion_active = std::any_of(completion_services.begin(), completion_services.end(),
             [](const FilesCompletionService *service) { return service && service->working(); });
-        if (!operation_active && !planning_active && !completion_active && !services[0]->working() &&
+        if (!dirty_editors && !operation_active && !planning_active && !completion_active && !services[0]->working() &&
             !services[1]->working() && !volume_request && !volume_archive_recovery_request &&
             !operation_recovery_request) {
             finish_exit();
@@ -5325,11 +6117,17 @@ struct FilesApp::State {
         exit_selected = false;
         ckv::widgets::DialogDescriptor descriptor;
         descriptor.title = "Close Files";
-        descriptor.fields.push_back({.label = operation_active ? "A file operation is pending."
-                : "Files is still reading or checking.", .kind = ckv::widgets::FieldKind::Note});
+        descriptor.fields.push_back({.label = dirty_editors
+                ? "Embedded editor has unsaved changes."
+                : (operation_active ? "A file operation is pending." : "Files is still reading or checking."),
+            .kind = ckv::widgets::FieldKind::Note});
+        if (dirty_editors)
+            descriptor.fields.push_back({.label = "Unsaved editor changes will be lost if you exit.",
+                .kind = ckv::widgets::FieldKind::Note});
         if (operation_active)
             descriptor.fields.push_back({.label = "Completed changes remain.", .kind = ckv::widgets::FieldKind::Note});
-        descriptor.fields.push_back({.label = "Stopping may wait for storage.", .kind = ckv::widgets::FieldKind::Note});
+        if (!dirty_editors)
+            descriptor.fields.push_back({.label = "Stopping may wait for storage.", .kind = ckv::widgets::FieldKind::Note});
         descriptor.buttons = {
             {"&Stay", ckv::widgets::ButtonRole::Accept, {}},
             {"Stop activity and e&xit", ckv::widgets::ButtonRole::Dismiss, [this] { exit_selected = true; }}};
@@ -5482,6 +6280,48 @@ bool FilesApp::mark_pattern(std::size_t pane, std::string pattern, bool marked) 
 bool FilesApp::compare_directories() { return state_->compare_directories(); }
 bool FilesApp::execute_recovery_action(std::size_t journal_index, FilesOperationRecoveryActionKind kind) {
     return state_->execute_recovery_action(journal_index, kind);
+}
+bool FilesApp::open_search() { return state_->show_search(); }
+bool FilesApp::open_directory_tree() { return state_->show_directory_tree(); }
+bool FilesApp::open_sync_directories() { return state_->show_sync_directories(); }
+bool FilesApp::open_diff_files() { return state_->show_diff_files(); }
+bool FilesApp::open_archive_browse() { return state_->show_archive_browse(); }
+bool FilesApp::open_archive_create() { return state_->show_archive_create(); }
+bool FilesApp::open_archive_extract() { return state_->show_archive_extract(); }
+bool FilesApp::open_embedded_editor(bool new_document) { return state_->show_embedded_editor(new_document); }
+bool FilesApp::open_embedded_terminal() { return state_->show_embedded_terminal(); }
+bool FilesApp::open_run_command() { return state_->show_run_command(); }
+bool FilesApp::open_user_menu() { return state_->show_user_menu(); }
+bool FilesApp::open_connect_remote() { return state_->show_connect_remote(); }
+bool FilesApp::open_inspect_volume_archive() { return state_->show_inspect_volume_archive(); }
+bool FilesApp::open_restore_volume_archive() { return state_->show_restore_volume_archive(); }
+bool FilesApp::parity_dialog_pending() const {
+    return (state_->parity_dialog && !state_->parity_dialog->completed()) ||
+           (state_->parity_report_window && !state_->parity_report_lifetime.expired());
+}
+std::size_t FilesApp::embedded_editor_count() const {
+    std::size_t count = 0;
+    for (const auto &ed : state_->embedded_editors) {
+        if (ed.window && !ed.lifetime.expired())
+            ++count;
+    }
+    return count;
+}
+bool FilesApp::has_dirty_embedded_editors() const {
+    return state_->has_dirty_embedded_editors();
+}
+bool FilesApp::save_embedded_editor(std::size_t index, bool force_overwrite) {
+    return state_->save_embedded_editor(index, force_overwrite);
+}
+bool FilesApp::edit_embedded_editor_text_for_test(std::size_t index, std::string text) {
+    state_->prune_embedded_editors();
+    if (index >= state_->embedded_editors.size() || !state_->embedded_editors[index].document)
+        return false;
+    state_->embedded_editors[index].document->set_text(std::move(text));
+    return true;
+}
+bool FilesApp::embedded_terminal_open() const {
+    return state_->embedded_terminal_window && !state_->embedded_terminal_lifetime.expired();
 }
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;

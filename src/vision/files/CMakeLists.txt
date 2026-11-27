@@ -1,10 +1,15 @@
 # Copyright (c) 2026 C. Klukas. All rights reserved.
 # SPDX-License-Identifier: GPL-3.0-or-later
 find_package(Threads REQUIRED)
-add_library(ck_vision_files STATIC files_completion_service.cpp files_completion_index.cpp files_location.cpp files_location_text.cpp files_location_draft.cpp files_location_dialog.cpp files_operation_review_dialog.cpp files_operation_planning_service.cpp files_operation_execution_service.cpp files_operation_recovery.cpp files_operation_recovery_cleanup.cpp files_pane_grid.cpp files_pane_service.cpp files_settings.cpp files_settings_service.cpp files_volume_service.cpp files_volume_archive.cpp files_volume_source.cpp files_volume_archive_review_dialog.cpp files_app.cpp files_app_wake.cpp)
+find_package(ZLIB QUIET)
+add_library(ck_vision_files STATIC files_completion_service.cpp files_completion_index.cpp files_location.cpp files_location_text.cpp files_location_draft.cpp files_location_dialog.cpp files_operation_review_dialog.cpp files_operation_planning_service.cpp files_operation_execution_service.cpp files_operation_recovery.cpp files_operation_recovery_cleanup.cpp files_pane_grid.cpp files_pane_service.cpp files_settings.cpp files_settings_service.cpp files_volume_service.cpp files_volume_archive.cpp files_volume_archive_restore.cpp files_volume_source.cpp files_volume_archive_review_dialog.cpp files_search_service.cpp files_compare_sync_service.cpp files_ordinary_archive.cpp files_embedded_editor.cpp files_terminal_session.cpp files_remote_provider.cpp files_app.cpp files_app_wake.cpp)
 target_compile_features(ck_vision_files PUBLIC cxx_std_20)
-target_include_directories(ck_vision_files PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ck_vision_files PUBLIC ck_files_core ck_vision_shell ck_vision_keymap ckvision::cvision Threads::Threads PRIVATE ck_core_fs_native)
+target_include_directories(ck_vision_files PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include)
+target_link_libraries(ck_vision_files PUBLIC ck_files_core ck_vision_shell ck_vision_keymap ckvision::cvision Threads::Threads PRIVATE ck_core_fs_native ck_du_core ck_vision_edit)
+if(ZLIB_FOUND)
+  target_compile_definitions(ck_vision_files PRIVATE CKTOOLS_HAS_ZLIB=1)
+  target_link_libraries(ck_vision_files PRIVATE ZLIB::ZLIB)
+endif()
 cktools_strict(ck_vision_files)
 
 add_executable(ckfiles_ckvision main.cpp)
@@ -68,6 +73,18 @@ if(BUILD_TESTING)
   add_test(NAME ck_vision_files_wp07_fault_and_crash_tests COMMAND ck_vision_files_wp07_fault_and_crash_tests)
   set_tests_properties(ck_vision_files_wp07_fault_and_crash_tests PROPERTIES
     ENVIRONMENT "CKTEST_FILTER=" LABELS "files;fault;recovery" RUN_SERIAL TRUE TIMEOUT 120)
+  add_executable(ck_vision_files_parity_tests tests/files_parity_cp07_cp13_tests.cpp)
+  target_link_libraries(ck_vision_files_parity_tests PRIVATE ck_vision_files ck_vision_shell ck_files_platform ckvision::cvision)
+  target_compile_definitions(ck_vision_files_parity_tests PRIVATE
+    CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT="${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}"
+    CKTOOLS_TEST_TEMP_ROOT="${CKTOOLS_TEST_TEMP_ROOT}")
+  if(ZLIB_FOUND)
+    target_compile_definitions(ck_vision_files_parity_tests PRIVATE CKTOOLS_HAS_ZLIB=1)
+  endif()
+  cktools_strict(ck_vision_files_parity_tests)
+  add_test(NAME ck_vision_files_parity_tests COMMAND ck_vision_files_parity_tests)
+  set_tests_properties(ck_vision_files_parity_tests PROPERTIES
+    LABELS "files;parity;cp07-cp14" TIMEOUT 120)
 endif()
 
 # Native ownership/finalization contracts use genuine Linux staging providers.

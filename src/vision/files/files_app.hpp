@@ -95,6 +95,26 @@ class FilesApp final {
     bool mark_pattern(std::size_t pane, std::string pattern, bool marked);
     bool compare_directories();
     bool execute_recovery_action(std::size_t journal_index, FilesOperationRecoveryActionKind kind);
+    bool open_search();
+    bool open_directory_tree();
+    bool open_sync_directories();
+    bool open_diff_files();
+    bool open_archive_browse();
+    bool open_archive_create();
+    bool open_archive_extract();
+    bool open_embedded_editor(bool new_document = false);
+    bool open_embedded_terminal();
+    bool open_run_command();
+    bool open_user_menu();
+    bool open_connect_remote();
+    bool open_inspect_volume_archive();
+    bool open_restore_volume_archive();
+    bool parity_dialog_pending() const;
+    std::size_t embedded_editor_count() const;
+    bool has_dirty_embedded_editors() const;
+    bool save_embedded_editor(std::size_t index, bool force_overwrite = false);
+    bool edit_embedded_editor_text_for_test(std::size_t index, std::string text);
+    bool embedded_terminal_open() const;
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);
