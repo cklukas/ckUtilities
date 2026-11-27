@@ -1066,16 +1066,14 @@
 <g data-box-drawing="single">
 <path d="M 1075.5 575.5 L 1075.5 585 L 1070.5 585" fill="none" stroke="#00aa00" stroke-width="3" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="608" xml:space="preserve" fill="#aa0000">Enter</text>
-<text x="63" y="608" xml:space="preserve" fill="#000000">Open</text>
-<text x="117" y="608" xml:space="preserve" fill="#aa0000">Backspace</text>
-<text x="207" y="608" xml:space="preserve" fill="#000000">Parent folder</text>
-<text x="342" y="608" xml:space="preserve" fill="#aa0000">F4</text>
-<text x="369" y="608" xml:space="preserve" fill="#000000">Switch pane</text>
-<text x="486" y="608" xml:space="preserve" fill="#aa0000">Insert</text>
-<text x="549" y="608" xml:space="preserve" fill="#000000">Mark</text>
-<text x="603" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Cancel activity</text>
-<text x="756" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Inspect archive recovery</text>
+<text x="9" y="608" xml:space="preserve" fill="#000000">Open</text>
+<text x="63" y="608" xml:space="preserve" fill="#000000">Parent folder</text>
+<text x="198" y="608" xml:space="preserve" fill="#000000">Switch pane</text>
+<text x="315" y="608" xml:space="preserve" fill="#aa0000">Insert</text>
+<text x="378" y="608" xml:space="preserve" fill="#000000">Mark</text>
+<text x="432" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Cancel activity</text>
+<text x="585" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Inspect archive recovery</text>
+<text x="819" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Clean up archive staging</text>
 <g id="raster-plane">
 </g>
 </svg>

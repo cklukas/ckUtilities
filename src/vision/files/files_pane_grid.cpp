@@ -108,7 +108,9 @@ const ck::files::PaneStateStamp *FilesPaneGridModel::stamp() const noexcept {
         },
         page_);
 }
-bool FilesPaneGridModel::current() const noexcept { return volume_current_ || (stamp() && stamp()->current()); }
+bool FilesPaneGridModel::current() const noexcept {
+    return volume_current_ || archive_current_ || (stamp() && stamp()->current());
+}
 std::uint64_t FilesPaneGridModel::row_count() const noexcept { return total_; }
 FilesPaneViewport FilesPaneGridModel::viewport() const noexcept {
     return {first_, static_cast<std::size_t>(std::max(1, height_))};
@@ -118,10 +120,12 @@ template <class P> bool FilesPaneGridModel::adopt(std::shared_ptr<const P> page,
         page->visible_rows() > std::numeric_limits<std::size_t>::max())
         return false;
     // Sealed producers validate row IDs, text budgets and complete capture.
-    if (volume_current_)
+    if (volume_current_ || archive_current_)
         first_ = cursor_ = 0;
     volume_current_ = false;
+    archive_current_ = false;
     volumes_.clear();
+    archive_rows_.clear();
     total_ = page->visible_rows();
     page_first_ = page->first();
     page_ = std::move(page);
@@ -158,20 +162,36 @@ void FilesPaneGridModel::publish_volumes(std::vector<FilesVolumeRecord> volumes)
     }
     page_ = std::monostate{};
     volumes_ = std::move(volumes);
+    archive_rows_.clear();
     total_ = volumes_.size();
     page_first_ = first_ = 0;
     cursor_ = selected;
     volume_current_ = true;
+    archive_current_ = false;
+    input_locked_ = false;
+    reveal();
+}
+void FilesPaneGridModel::publish_archive(std::vector<FilesArchiveRow> rows_list) {
+    page_ = std::monostate{};
+    volumes_.clear();
+    archive_rows_ = std::move(rows_list);
+    total_ = archive_rows_.size();
+    page_first_ = first_ = 0;
+    cursor_ = 0;
+    volume_current_ = false;
+    archive_current_ = true;
     input_locked_ = false;
     reveal();
 }
 void FilesPaneGridModel::clear() noexcept {
     page_ = std::monostate{};
     volumes_.clear();
+    archive_rows_.clear();
     total_ = page_first_ = first_ = 0;
     cursor_ = 0;
     input_locked_ = false;
     volume_current_ = false;
+    archive_current_ = false;
 }
 const ck::files::PaneDisplayRow *FilesPaneGridModel::row(std::uint64_t at) const noexcept {
     const auto *values = rows();
@@ -180,7 +200,7 @@ const ck::files::PaneDisplayRow *FilesPaneGridModel::row(std::uint64_t at) const
     return &(*values)[static_cast<std::size_t>(at - page_first_)];
 }
 std::optional<FilesPaneRowTarget> FilesPaneGridModel::target() const {
-    if (volume_current_)
+    if (volume_current_ || archive_current_)
         return {};
     const auto *value = row(cursor_);
     if (!current() || !value)
@@ -188,16 +208,16 @@ std::optional<FilesPaneRowTarget> FilesPaneGridModel::target() const {
     return FilesPaneRowTarget{*stamp(), value->id};
 }
 const ck::files::PaneDisplayRow *FilesPaneGridModel::cursor_row() const noexcept {
-    return current() ? row(cursor_) : nullptr;
+    return current() && !volume_current_ && !archive_current_ ? row(cursor_) : nullptr;
 }
 std::optional<bool> FilesPaneGridModel::cursor_marked() const {
-    if (volume_current_)
+    if (volume_current_ || archive_current_)
         return std::nullopt;
     const auto *value = row(cursor_);
     return current() && value ? std::optional<bool>(value->marked) : std::nullopt;
 }
 std::optional<ck::files::ObjectKind> FilesPaneGridModel::cursor_kind() const {
-    if (volume_current_)
+    if (volume_current_ || archive_current_)
         return std::nullopt;
     const auto *value = row(cursor_);
     return current() && value && value->metadata.kind.value()
@@ -208,6 +228,11 @@ std::optional<FilesVolumeRecord> FilesPaneGridModel::volume_cursor() const {
     if (!volume_current_ || cursor_ >= volumes_.size())
         return std::nullopt;
     return volumes_[cursor_];
+}
+std::optional<FilesArchiveRow> FilesPaneGridModel::archive_cursor() const {
+    if (!archive_current_ || cursor_ >= archive_rows_.size())
+        return std::nullopt;
+    return archive_rows_[cursor_];
 }
 void FilesPaneGridModel::set_viewport(int rows_count, int width) {
     const auto previous_height = height_;
@@ -230,6 +255,14 @@ ckv::widgets::GridFrame FilesPaneGridModel::frame() const {
             result.columns.push_back(3);
         return result;
     }
+    if (archive_current_) {
+        result.columns = {1};
+        if (width_ >= 40)
+            result.columns.push_back(2);
+        if (width_ >= 24)
+            result.columns.push_back(3);
+        return result;
+    }
     result.columns = {0, 1};
     if (width_ >= 52)
         result.columns.push_back(2);
@@ -249,6 +282,18 @@ int FilesPaneGridModel::column_width(ckv::widgets::GridIndex column) const {
             return filesystem_width;
         case 3:
             return space_width;
+        default:
+            return 1;
+        }
+    }
+    if (archive_current_) {
+        switch (column) {
+        case 1:
+            return std::max(1, width_ - (width_ >= 40 ? 13 : 0) - (width_ >= 24 ? 13 : 0));
+        case 2:
+            return 12;
+        case 3:
+            return 12;
         default:
             return 1;
         }
@@ -316,6 +361,26 @@ ckv::widgets::GridCell FilesPaneGridModel::cell(ckv::widgets::GridIndex at, ckv:
             break;
         case 3:
             result.text = volume_short(volume.free_bytes) + "/" + volume_short(volume.total_bytes);
+            result.alignment = ckv::widgets::CellAlignment::End;
+            break;
+        default:
+            break;
+        }
+        return result;
+    }
+    if (archive_current_) {
+        if (at >= archive_rows_.size())
+            return result;
+        const auto &entry = archive_rows_[at];
+        switch (column) {
+        case 1:
+            result.text = entry.name;
+            break;
+        case 2:
+            result.text = !entry.safe_path ? "Unsafe" : (entry.is_directory ? "Folder" : "File");
+            break;
+        case 3:
+            result.text = entry.is_directory ? "Archive" : std::to_string(entry.uncompressed_size);
             result.alignment = ckv::widgets::CellAlignment::End;
             break;
         default:

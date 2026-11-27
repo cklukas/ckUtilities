@@ -77,10 +77,15 @@ with unified text diffs or hexadecimal binary diffs.
 
 ### Ordinary Archives (ZIP / TAR / TAR.GZ)
 
-**Tools → Browse archive** inspects archive entries and uncompressed sizes
-before extraction, flagging unsafe paths or collisions explicitly.
+Press **Enter** on a ZIP, TAR, or TAR.GZ archive (or choose **Tools → Browse
+archive**) to open it directly inside the active pane like a folder, while the
+other pane stays free as an extraction destination. While browsing inside an
+archive, the menu bar switches to **Archive** and the footer updates to
+archive-specific actions (**Enter** Open folder / preview member, **Backspace**
+Parent / exit archive, **F5** Extract to other pane, **F3** Preview, **F4**
+Switch pane, **Esc** Exit archive).
 
-![Files archive browser showing ZIP entries and uncompressed sizes](../generated/screenshots/ck-files-archive.svg)
+![Files browsing a ZIP archive directly inside the left pane with adapted Archive menu and footer hotkeys](../generated/screenshots/ck-files-archive.svg)
 
 ### Volume and Mount View (**Backspace** at root)
 

@@ -502,7 +502,15 @@ struct FilesApp::State {
         std::optional<ck::files::PaneRowId> range_start;
         std::string error;
         std::string archive_notice;
+        struct ArchiveBrowseState {
+            ck::files::NativeAbsolutePath archive_path;
+            std::string archive_display;
+            OrdinaryArchiveCatalog catalog;
+            std::string inner_dir;
+            std::string status_note;
+        };
         std::optional<FilesPaneTicket> archive_refresh;
+        std::optional<ArchiveBrowseState> archive_browse;
         bool volume_view = false, volume_inventory_stale = false;
     };
     struct VolumeArchiveOrigin {
@@ -577,9 +585,15 @@ struct FilesApp::State {
         FilesDocumentSnapshot snapshot;
         bool allow_discard_close = false;
     };
-    enum class ActiveViewMode { Pane, Editor, PreviewText, PreviewHex, PreviewHexOnly, Terminal, Report };
+    enum class ActiveViewMode { Pane, ArchivePane, Editor, PreviewText, PreviewHex, PreviewHexOnly, Terminal, Report };
     ActiveViewMode active_view_mode = ActiveViewMode::Pane;
     std::vector<ckv::widgets::MenuBarItem> pane_menus;
+    ckv::ui::CommandId archive_open_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_parent_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_preview_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_extract_pane_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_switch_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_exit_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId editor_save_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId editor_undo_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId editor_redo_id = ckv::ui::kInvalidCommand;
@@ -822,10 +836,15 @@ struct FilesApp::State {
                                   [this] { return availability("ck.files.inspect_link").enabled; });
             enter_id = own(
                 "ck.files.enter_directory", [this] {
-                    if (panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
+                    if (panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory) {
                         enter_directory(active);
-                    else
+                    } else if (const auto child = selected_child_path(active);
+                               child && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile &&
+                               is_browsable_ordinary_archive(*child)) {
+                        open_archive_in_pane(active, *child);
+                    } else {
                         show_preview();
+                    }
                 },
                 [this] { return availability("ck.files.enter_directory").enabled; });
             create_directory_id = own("ck.files.create_directory", [this] { show_create_directory(); },
@@ -1196,7 +1215,60 @@ struct FilesApp::State {
                 },
                 [this] { return parity_report_window && !parity_report_lifetime.expired(); });
 
+            const auto archive_pane_active = [this] { return panes[active].archive_browse.has_value(); };
+            archive_open_id = own_view_cmd(
+                "ck.files.archive.open", "&Open", "Archive",
+                ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}, "Enter", {"ck.files.archive_pane"},
+                [this] { archive_pane_open_selected(active); },
+                [this] {
+                    return panes[active].archive_browse.has_value() &&
+                           panes[active].model.archive_cursor().has_value();
+                });
+            archive_parent_id = own_view_cmd(
+                "ck.files.archive.parent", "&Parent / Exit", "Archive",
+                ckv::KeyChord{ckv::Key::Backspace, ckv::Modifier::None, {}}, "Backspace", {"ck.files.archive_pane"},
+                [this] { archive_pane_parent(active); }, archive_pane_active);
+            archive_extract_pane_id = own_view_cmd(
+                "ck.files.archive.extract_to_other", "E&xtract to other pane", "Archive",
+                ckv::KeyChord{ckv::Key::F5, ckv::Modifier::None, {}}, "F5", {"ck.files.archive_pane"},
+                [this] { archive_pane_extract_to_other(active); },
+                [this] {
+                    return panes[active].archive_browse.has_value() &&
+                           !panes[1 - active].archive_browse.has_value() &&
+                           pane_absolute_path(1 - active).has_value();
+                });
+            archive_preview_id = own_view_cmd(
+                "ck.files.archive.preview", "Pre&view", "Archive",
+                ckv::KeyChord{ckv::Key::F3, ckv::Modifier::None, {}}, "F3", {"ck.files.archive_pane"},
+                [this] { archive_pane_preview_selected(active); },
+                [this] {
+                    if (!panes[active].archive_browse)
+                        return false;
+                    const auto cur = panes[active].model.archive_cursor();
+                    return cur && !cur->is_directory && cur->entry_index.has_value() && cur->safe_path;
+                });
+            archive_switch_id = own_view_cmd(
+                "ck.files.archive.switch_pane", "S&witch pane", "Archive",
+                ckv::KeyChord{ckv::Key::F4, ckv::Modifier::None, {}}, "F4", {"ck.files.archive_pane"},
+                [this] {
+                    switch_pane();
+                    sync_active_view_chrome();
+                },
+                archive_pane_active);
+            archive_exit_id = own_view_cmd(
+                "ck.files.archive.exit", "Exit &archive", "Archive",
+                ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, {}}, "Esc", {"ck.files.archive_pane"},
+                [this] { exit_archive_pane(active); }, archive_pane_active);
+
             if (auto *status = shell->status_line()) {
+                status->set_context_items("ck.files.archive_pane", {
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_open_id, "&Open", "Enter"}, 40},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_parent_id, "&Parent", "Backspace"}, 38},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_extract_pane_id, "E&xtract", "F5"}, 36},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_preview_id, "Pre&view", "F3"}, 34},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_switch_id, "&Switch pane", "F4"}, 30},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_exit_id, "Exit &archive", "Esc"}, 32},
+                });
                 status->set_context_items("ck.files.editor", {
                     ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_save_id, "&Save", "Ctrl+S"}, 40},
                     ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_close_id, "&Close", "Ctrl+W"}, 38},
@@ -2130,7 +2202,18 @@ struct FilesApp::State {
         else if (p.navigating)
             text = p.refreshing ? "Refreshing listing..." : p.entering ? "Opening folder..."
                               : p.homing ? "Opening home location..." : "Opening location...";
-        else if (p.volume_view) {
+        else if (p.archive_browse) {
+            const auto &ab = *p.archive_browse;
+            text = "Archive (read-only): " + std::to_string(p.model.row_count()) +
+                   (p.model.row_count() == 1 ? " item" : " items") + " | " +
+                   std::to_string(ab.catalog.total_uncompressed_bytes) + " B uncompressed";
+            if (!ab.status_note.empty())
+                text += " | " + ab.status_note;
+            else if (ab.catalog.has_unsafe_entries)
+                text += " | Unsafe paths blocked on extract";
+            else if (ab.catalog.has_collisions)
+                text += " | Collisions detected";
+        } else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
             if (!p.error.empty())
                 text = p.navigation_error ? "Volume view kept. " + p.error : p.error;
@@ -2250,7 +2333,9 @@ struct FilesApp::State {
                     }
                 }
             };
-            if (p.model.target() || p.selection.origin == ck::files::PaneSourcesOrigin::Marks)
+            if (p.archive_browse) {
+                // Archive pane uses its own Archive menu and footer commands.
+            } else if (p.model.target() || p.selection.origin == ck::files::PaneSourcesOrigin::Marks)
                 report_first_unavailable(selected_contextual);
             else
                 report_first_unavailable(empty_listing_contextual);
@@ -2764,8 +2849,12 @@ struct FilesApp::State {
             auto &p = panes[i];
             const std::string side = i == 0 ? "Left" : "Right";
             auto location = p.active ? p.active->display_text() : std::string("No completed location");
-            auto title = (active == i ? "[Active] " : "[Other] ") + side + "\n" +
-                         (p.volume_view ? "Volumes and mounts above " + location : location);
+            std::string heading_loc = p.volume_view ? "Volumes and mounts above " + location : location;
+            if (p.archive_browse) {
+                heading_loc = p.archive_browse->archive_display +
+                              (p.archive_browse->inner_dir.empty() ? " [Archive]" : ":/" + p.archive_browse->inner_dir);
+            }
+            auto title = (active == i ? "[Active] " : "[Other] ") + side + "\n" + heading_loc;
             if (surfaces[i]->heading->text() != title)
                 surfaces[i]->heading->set_text(std::move(title));
             auto text = status(i);
@@ -2888,6 +2977,12 @@ struct FilesApp::State {
     bool navigate(std::size_t i, FilesPaneLocation location, ck::files::PaneView view) {
         auto requested = std::make_shared<const FilesPaneLocation>(std::move(location));
         auto &p = panes[i];
+        if (p.archive_browse) {
+            p.archive_browse.reset();
+            if (surfaces[i] && surfaces[i]->grid)
+                surfaces[i]->grid->set_command_context("ck.files.pane");
+            sync_active_view_chrome();
+        }
         p.history_target.reset();
         auto range = p.model.viewport();
         auto submitted = services[i]->navigate(*requested, std::move(view), range.rows);
@@ -3568,6 +3663,20 @@ struct FilesApp::State {
         const auto palette_cmd = application.commands().standard().command_palette;
 
         switch (mode) {
+        case ActiveViewMode::ArchivePane:
+            return {
+                make_file_menu({cmd_item(archive_exit_id, "Exit &archive")}),
+                MenuBarItem{"&Archive",
+                            {cmd_item(archive_open_id, "&Open folder / preview"),
+                             cmd_item(archive_preview_id, "Pre&view member"),
+                             cmd_item(archive_parent_id, "&Parent folder"),
+                             MenuItem::separator(),
+                             cmd_item(archive_extract_pane_id, "E&xtract to other pane"),
+                             MenuItem::separator(),
+                             cmd_item(archive_switch_id, "S&witch pane"),
+                             cmd_item(archive_exit_id, "Exit &archive")}},
+                MenuBarItem{"&View", {cmd_item(palette_cmd, "&Commands...")}},
+                help_menu};
         case ActiveViewMode::Editor:
             return {
                 make_file_menu({cmd_item(editor_save_id, "&Save"), cmd_item(editor_close_id, "&Close editor")}),
@@ -3635,6 +3744,8 @@ struct FilesApp::State {
         if (parity_report_window && !parity_report_lifetime.expired() &&
             (contains(parity_report_window, focused) || shell->desktop().active_window() == parity_report_window))
             return ActiveViewMode::Report;
+        if (panes[active].archive_browse.has_value())
+            return ActiveViewMode::ArchivePane;
         return ActiveViewMode::Pane;
     }
     void sync_active_view_chrome() {
@@ -3850,38 +3961,219 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    static bool is_browsable_ordinary_archive(const ck::files::NativeAbsolutePath &path) {
+        const auto fmt = detect_ordinary_archive_format(path.display_text());
+        return fmt == OrdinaryArchiveFormat::Zip || fmt == OrdinaryArchiveFormat::Tar ||
+               fmt == OrdinaryArchiveFormat::TarGz;
+    }
+    static std::vector<FilesArchiveRow> build_archive_pane_rows(const OrdinaryArchiveCatalog &cat,
+                                                                std::string_view inner_dir) {
+        std::string prefix(inner_dir);
+        while (!prefix.empty() && prefix.back() == '/')
+            prefix.pop_back();
+        if (!prefix.empty())
+            prefix.push_back('/');
+
+        std::vector<FilesArchiveRow> dirs;
+        std::vector<FilesArchiveRow> files;
+        auto has_dir = [&](std::string_view name) {
+            for (const auto &d : dirs)
+                if (d.name == name)
+                    return true;
+            return false;
+        };
+        for (const auto &e : cat.entries) {
+            std::string normalized = e.path;
+            while (!normalized.empty() && normalized.front() == '/')
+                normalized.erase(normalized.begin());
+            while (!normalized.empty() && normalized.back() == '/')
+                normalized.pop_back();
+            if (normalized.empty())
+                continue;
+            if (!prefix.empty()) {
+                if (normalized.size() <= prefix.size() ||
+                    normalized.compare(0, prefix.size(), prefix) != 0)
+                    continue;
+            }
+            const std::string_view rest = std::string_view(normalized).substr(prefix.size());
+            if (rest.empty())
+                continue;
+            const auto slash = rest.find('/');
+            if (slash != std::string_view::npos) {
+                const std::string dir_name(rest.substr(0, slash));
+                if (!dir_name.empty() && !has_dir(dir_name)) {
+                    FilesArchiveRow row;
+                    row.name = dir_name;
+                    row.archive_path = prefix + dir_name;
+                    row.is_directory = true;
+                    row.safe_path = true;
+                    dirs.push_back(std::move(row));
+                }
+            } else if (e.kind == OrdinaryArchiveEntryKind::Directory) {
+                const std::string dir_name(rest);
+                if (!has_dir(dir_name)) {
+                    FilesArchiveRow row;
+                    row.name = dir_name;
+                    row.archive_path = prefix + dir_name;
+                    row.is_directory = true;
+                    row.entry_index = e.index;
+                    row.safe_path = e.safe_path;
+                    row.safety_warning = e.safety_warning;
+                    dirs.push_back(std::move(row));
+                }
+            } else {
+                FilesArchiveRow row;
+                row.name = std::string(rest);
+                row.archive_path = prefix + row.name;
+                row.is_directory = false;
+                row.entry_index = e.index;
+                row.uncompressed_size = e.uncompressed_size;
+                row.safe_path = e.safe_path;
+                row.safety_warning = e.safety_warning;
+                files.push_back(std::move(row));
+            }
+        }
+        auto by_name = [](const FilesArchiveRow &a, const FilesArchiveRow &b) { return a.name < b.name; };
+        std::sort(dirs.begin(), dirs.end(), by_name);
+        std::sort(files.begin(), files.end(), by_name);
+        dirs.insert(dirs.end(), std::make_move_iterator(files.begin()), std::make_move_iterator(files.end()));
+        return dirs;
+    }
+    void refresh_archive_pane_view(std::size_t pane_idx) {
+        auto &p = panes[pane_idx];
+        if (!p.archive_browse)
+            return;
+        auto rows = build_archive_pane_rows(p.archive_browse->catalog, p.archive_browse->inner_dir);
+        p.model.publish_archive(std::move(rows));
+        if (surfaces[pane_idx] && surfaces[pane_idx]->grid) {
+            surfaces[pane_idx]->grid->set_command_context("ck.files.archive_pane");
+            surfaces[pane_idx]->grid->model_changed();
+        }
+        sync_active_view_chrome();
+        labels();
+    }
+    bool open_archive_in_pane(std::size_t pane_idx, const ck::files::NativeAbsolutePath &arc) {
+        auto cat = list_ordinary_archive(arc);
+        if (!cat.error_message.empty()) {
+            panes[pane_idx].error = "Archive error: " + cat.error_message;
+            labels();
+            return false;
+        }
+        panes[pane_idx].error.clear();
+        panes[pane_idx].volume_view = false;
+        panes[pane_idx].archive_browse = Pane::ArchiveBrowseState{
+            arc, arc.display_text(), std::move(cat), {}, {}};
+        refresh_archive_pane_view(pane_idx);
+        if (surfaces[pane_idx] && surfaces[pane_idx]->grid)
+            application.set_focus(surfaces[pane_idx]->grid);
+        return true;
+    }
+    void exit_archive_pane(std::size_t pane_idx) {
+        auto &p = panes[pane_idx];
+        if (!p.archive_browse)
+            return;
+        p.archive_browse.reset();
+        if (surfaces[pane_idx] && surfaces[pane_idx]->grid)
+            surfaces[pane_idx]->grid->set_command_context("ck.files.pane");
+        refresh(pane_idx);
+        sync_active_view_chrome();
+        labels();
+    }
+    void archive_pane_parent(std::size_t pane_idx) {
+        auto &p = panes[pane_idx];
+        if (!p.archive_browse)
+            return;
+        auto &dir = p.archive_browse->inner_dir;
+        if (dir.empty()) {
+            exit_archive_pane(pane_idx);
+            return;
+        }
+        const auto slash = dir.rfind('/');
+        if (slash == std::string::npos)
+            dir.clear();
+        else
+            dir.resize(slash);
+        p.archive_browse->status_note.clear();
+        refresh_archive_pane_view(pane_idx);
+    }
+    void archive_pane_preview_selected(std::size_t pane_idx) {
+        auto &p = panes[pane_idx];
+        if (!p.archive_browse)
+            return;
+        const auto cur = p.model.archive_cursor();
+        if (!cur || cur->is_directory || !cur->entry_index || !cur->safe_path)
+            return;
+        std::string err;
+        auto data = read_ordinary_archive_entry(p.archive_browse->archive_path, *cur->entry_index, &err);
+        if (!data) {
+            p.archive_browse->status_note = err.empty() ? "Cannot preview entry" : err;
+            labels();
+            return;
+        }
+        constexpr std::size_t max_preview = 64 * 1024;
+        FilesPaneReply synthetic;
+        synthetic.state = FilesPaneReplyState::Ready;
+        auto prev = std::make_shared<FilesPanePreview>();
+        prev->complete = data->size() <= max_preview;
+        if (data->size() > max_preview)
+            data->resize(max_preview);
+        prev->bytes = std::move(*data);
+        synthetic.preview = std::move(prev);
+        consume_preview(pane_idx, std::move(synthetic));
+    }
+    void archive_pane_open_selected(std::size_t pane_idx) {
+        auto &p = panes[pane_idx];
+        if (!p.archive_browse)
+            return;
+        const auto cur = p.model.archive_cursor();
+        if (!cur)
+            return;
+        if (cur->is_directory) {
+            p.archive_browse->inner_dir = cur->archive_path;
+            p.archive_browse->status_note.clear();
+            refresh_archive_pane_view(pane_idx);
+        } else {
+            archive_pane_preview_selected(pane_idx);
+        }
+    }
+    void archive_pane_extract_to_other(std::size_t pane_idx) {
+        auto &p = panes[pane_idx];
+        if (!p.archive_browse)
+            return;
+        const auto dst_opt = pane_absolute_path(1 - pane_idx);
+        if (!dst_opt || panes[1 - pane_idx].archive_browse)
+            return;
+        std::vector<std::size_t> indices;
+        if (const auto cur = p.model.archive_cursor()) {
+            if (!cur->is_directory && cur->entry_index) {
+                indices.push_back(*cur->entry_index);
+            } else if (cur->is_directory) {
+                const std::string sub = cur->archive_path + "/";
+                for (const auto &e : p.archive_browse->catalog.entries) {
+                    if (e.path == cur->archive_path || e.path.rfind(sub, 0) == 0)
+                        indices.push_back(e.index);
+                }
+            }
+        }
+        const auto res = extract_ordinary_archive(
+            p.archive_browse->archive_path, *dst_opt, indices);
+        if (res.extracted_files > 0 || res.extracted_directories > 0)
+            refresh(1 - pane_idx);
+        if (!res.error_message.empty()) {
+            p.archive_browse->status_note = "Extract error: " + res.error_message;
+        } else {
+            p.archive_browse->status_note =
+                "Extracted " + std::to_string(res.extracted_files) + " file(s)";
+        }
+        labels();
+    }
     bool show_archive_browse() {
         if (!availability("ck.files.archive_browse").enabled)
             return false;
         const auto arc = selected_child_path(active);
         if (!arc)
             return false;
-        const auto cat = list_ordinary_archive(*arc);
-        std::ostringstream out;
-        out << "Archive: " << arc->display_text() << "\n";
-        if (!cat.error_message.empty()) {
-            out << "Error: " << cat.error_message << "\n";
-        } else {
-            out << "Entries: " << cat.entries.size()
-                << " | Total uncompressed: " << cat.total_uncompressed_bytes << " B\n";
-            if (cat.has_unsafe_entries)
-                out << "WARNING: Archive contains unsafe paths/links (blocked on extract)\n";
-            if (cat.has_collisions)
-                out << "WARNING: Archive contains colliding member names\n";
-            out << "\n";
-            const std::size_t shown = std::min<std::size_t>(cat.entries.size(), 250);
-            for (std::size_t idx = 0; idx < shown; ++idx) {
-                const auto &e = cat.entries[idx];
-                out << (e.kind == OrdinaryArchiveEntryKind::Directory ? "[DIR]  " : "[FILE] ")
-                    << e.path << " (" << e.uncompressed_size << " B)";
-                if (!e.safe_path)
-                    out << " [UNSAFE: " << e.safety_warning << "]";
-                out << "\n";
-            }
-        }
-        show_parity_report("Archive browser", out.str());
-        labels();
-        return true;
+        return open_archive_in_pane(active, *arc);
     }
     bool show_archive_create() {
         if (!availability("ck.files.archive_create").enabled)
@@ -6322,6 +6614,7 @@ struct FilesApp::State {
         active = 1 - active;
         layout();
         application.set_focus(surfaces[active]->grid);
+        sync_active_view_chrome();
         wake.request();
     }
     void cancel_read() {

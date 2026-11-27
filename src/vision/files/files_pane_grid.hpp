@@ -15,6 +15,15 @@ struct FilesPaneRowTarget {
     ck::files::PaneStateStamp stamp;
     ck::files::PaneRowId row;
 };
+struct FilesArchiveRow {
+    std::string name;
+    std::string archive_path;
+    bool is_directory = false;
+    std::optional<std::size_t> entry_index;
+    std::uint64_t uncompressed_size = 0;
+    bool safe_path = true;
+    std::string safety_warning;
+};
 // UI-thread projection only. Owns at most one bounded immutable display page,
 // never a native name, worker model, index file, directory cursor or HeldChild.
 // Provider calls perform no I/O, scheduling, callbacks or whole-directory scans.
@@ -28,6 +37,7 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     bool publish(std::shared_ptr<const ck::files::PanePage> page, bool follow_worker_focus = false);
     bool publish(std::shared_ptr<const ck::files::IndexedPanePage> page, bool follow_worker_focus = false);
     void publish_volumes(std::vector<FilesVolumeRecord> volumes);
+    void publish_archive(std::vector<FilesArchiveRow> rows);
     void clear() noexcept;
     FilesPaneViewport viewport() const noexcept;
     std::uint64_t row_count() const noexcept;
@@ -39,6 +49,8 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     std::optional<ck::files::ObjectKind> cursor_kind() const;
     std::optional<FilesVolumeRecord> volume_cursor() const;
     bool volume_view() const noexcept { return volume_current_; }
+    std::optional<FilesArchiveRow> archive_cursor() const;
+    bool archive_view() const noexcept { return archive_current_; }
     // Acknowledged state changes pause input without dropping focus or hiding
     // the retained page. Geometry updates and rendering remain available.
     void set_input_locked(bool locked) noexcept { input_locked_ = locked; }
@@ -68,9 +80,10 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     void reveal() noexcept;
     Page page_;
     std::vector<FilesVolumeRecord> volumes_;
+    std::vector<FilesArchiveRow> archive_rows_;
     std::uint64_t total_ = 0, page_first_ = 0, first_ = 0;
     std::size_t cursor_ = 0;
     int height_ = 0, width_ = 0;
-    bool input_locked_ = false, volume_current_ = false;
+    bool input_locked_ = false, volume_current_ = false, archive_current_ = false;
 };
 } // namespace ck::vision
