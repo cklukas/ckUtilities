@@ -659,35 +659,6 @@ struct Fixture {
         return text;
     }
 };
-#if defined(__APPLE__)
-void expect_mac_copy_publication_refusal(Fixture& fixture, const ck::testing::FilesFixtureTree& source_before,
-                                         const ck::testing::FilesFixtureTree& target_before, bool /*marked_batch*/ = false) {
-    fixture.until([&] {
-        return !fixture.app->operation_review_pending() && !fixture.app->pending(0) && !fixture.app->pending(1) &&
-               fixture.app->status(0).find("Copy failed") != std::string::npos;
-    });
-    fixture.execution_service->request_stop();
-    fixture.execution_service->join(); // Drain worker before independent inspection.
-    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
-    CK_CHECK(fixture.app->status(0).find("verified file publication is unavailable on this platform") != std::string::npos);
-    CK_CHECK(fixture.app->status(0).find("create_staging_file.fd_publication_unqualified") == std::string::npos);
-    CK_CHECK(fixture.app->status(0).find("preflight.fd_publication_unqualified") == std::string::npos);
-    CK_CHECK(fixture.app->status(0).find("Copy completed") == std::string::npos);
-    unsigned journals = 0;
-    if (std::filesystem::exists(fixture.scratch.path() / "operation-journals")) {
-        for (const auto& entry : std::filesystem::directory_iterator(fixture.scratch.path() / "operation-journals")) {
-            const auto filename = entry.path().filename().native();
-            if (filename.starts_with(".ck-copy-journal-") || filename.starts_with(".ck-tree-journal-"))
-                ++journals;
-        }
-    }
-    CK_CHECK(journals == 0);
-    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right") == target_before);
-    for (unsigned poll = 0; poll != 3; ++poll) fixture.application.step(fixture.clock.now_nanos());
-    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
-    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right") == target_before);
-}
-#endif
 } // namespace
 CK_TEST(files_app_composes_independent_native_panes_in_every_suite_theme) {
     for (auto theme :
@@ -1383,18 +1354,10 @@ CK_TEST(files_app_move_review_lists_every_marked_name_and_the_full_paths) {
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return !f.app->operation_review_pending(); });
 }
-#if defined(__APPLE__)
-CK_TEST(files_app_copy_acceptance_reports_unqualified_mac_publication_after_review)
-#else
 CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes)
-#endif
 {
     Fixture f;
     f.loaded();
-#if defined(__APPLE__)
-    const auto source_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "left");
-    const auto target_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "right");
-#endif
     CK_CHECK(f.command("ck.files.copy"));
     f.until([&] { return f.app->operation_review_pending(); });
     f.application.step(f.clock.now_nanos());
@@ -1417,25 +1380,13 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
     // The copy adapter declares an explicit portable-metadata boundary; the
     // action order is Cancel, choose destination, continue, skip.
     combos.front()->set_selected_index(2);
-#if defined(__APPLE__)
-    f.hold_execution_wakeup = true;
-#endif
     CK_CHECK(apply->activate_mnemonic("a"));
-#if defined(__APPLE__)
-    f.until([&] { return f.app->status(0).find("Copying to the other pane") != std::string::npos; });
-    CK_CHECK(f.command("ck.files.switch_pane") && f.app->active_pane() == 1);
-    f.hold_execution_wakeup = false;
-    f.wake.request();
-    expect_mac_copy_publication_refusal(f, source_before, target_before);
-    CK_CHECK(f.app->status(1).find("Copy needs reconciliation") == std::string::npos);
-#else
     f.until([&] { return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
                         !f.app->pending(0) && !f.app->pending(1) &&
                         f.app->status(0).find("Copying") == std::string::npos &&
                         f.app->status(1).find("Copying") == std::string::npos; });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
-#endif
 }
 CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {}, false, false, true);
@@ -1805,18 +1756,10 @@ CK_TEST(files_app_folder_review_refuses_a_destination_file_added_after_preview) 
     CK_CHECK(records.state == DirectoryReadState::End && records.names.empty());
 }
 
-#if defined(__APPLE__)
-CK_TEST(files_app_recursive_copy_acceptance_reports_unqualified_mac_publication)
-#else
 CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review)
-#endif
 {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();
-#if defined(__APPLE__)
-    const auto source_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "left");
-    const auto target_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "right");
-#endif
     for (std::size_t row = 0; row != f.app->model(0).row_count() &&
          f.app->model(0).cursor_kind() != ObjectKind::Directory; ++row) {
         CK_CHECK(f.key(ckv::Key::Down));
@@ -1846,9 +1789,6 @@ CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review)
     CK_CHECK(apply != nullptr);
     combos.front()->set_selected_index(2); // Continue with listed losses.
     CK_CHECK(apply->activate_mnemonic("a"));
-#if defined(__APPLE__)
-    expect_mac_copy_publication_refusal(f, source_before, target_before);
-#else
     f.until([&] {
         return std::filesystem::is_regular_file(f.scratch.path() / "right" / "left-item-0" / "inside.txt") &&
                std::filesystem::is_regular_file(f.scratch.path() / "right" / "left-item-0" / "nested" / "leaf.txt") &&
@@ -1858,7 +1798,6 @@ CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review)
     });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
-#endif
 }
 CK_TEST(files_app_copy_requires_review_again_when_a_child_is_added_during_review) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
@@ -1914,18 +1853,10 @@ CK_TEST(files_app_copy_requires_review_again_when_a_child_is_added_during_review
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
     CK_CHECK(std::filesystem::is_empty(f.scratch.path() / "operation-journals"));
 }
-#if defined(__APPLE__)
-CK_TEST(files_app_marked_copy_acceptance_preserves_inputs_after_mac_reconciliation)
-#else
 CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch)
-#endif
 {
     Fixture f;
     f.loaded();
-#if defined(__APPLE__)
-    const auto source_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "left");
-    const auto target_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "right");
-#endif
     CK_CHECK(f.key(ckv::Key::Insert));
     f.loaded();
     CK_CHECK(f.key(ckv::Key::Down));
@@ -1955,9 +1886,6 @@ CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch)
     CK_CHECK(apply != nullptr);
     combos.front()->set_selected_index(2); // Continue with listed losses.
     CK_CHECK(apply->activate_mnemonic("a"));
-#if defined(__APPLE__)
-    expect_mac_copy_publication_refusal(f, source_before, target_before, true);
-#else
     f.until([&] {
         return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
                std::filesystem::exists(f.scratch.path() / "right" / "left-item-1") &&
@@ -1967,7 +1895,6 @@ CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch)
     });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
-#endif
 }
 CK_TEST(files_app_rename_uses_stamped_worker_target_on_all_platforms) {
     Fixture f;
@@ -2891,11 +2818,7 @@ CK_TEST(files_app_volume_refresh_retains_the_mount_selection_and_blocks_copy_aft
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return !f.app->properties_pending(); });
     CK_CHECK(f.command("ck.files.refresh"));
-#if defined(__APPLE__)
-    constexpr std::string_view unavailable_copy_reason = "archive writes unsupported";
-#else
     constexpr std::string_view unavailable_copy_reason = "source volume mount identity";
-#endif
     f.until([&] {
         return !f.app->volume_info_pending() &&
                f.app->availability("ck.files.copy").reason.find(unavailable_copy_reason) != std::string::npos;

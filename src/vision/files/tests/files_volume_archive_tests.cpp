@@ -248,19 +248,6 @@ Observation<FilesVolumeArchiveWriteResult> write_with_native_owners(
     return result;
 }
 
-#if defined(__APPLE__)
-void check_macos_publication_unavailable(const Observation<FilesVolumeArchiveWriteResult> &result,
-    const std::filesystem::path &output) {
-    CK_CHECK(!result.value());
-    CK_CHECK(result.state()==ObservationState::Unsupported);
-    CK_CHECK(result.unavailable_detail() && result.unavailable_detail()->error.operation==
-        "create_staging_file.fd_publication_unqualified");
-    std::string content;
-    CK_CHECK(!ck::io::read_file(output,content));
-}
-
-#endif
-
 // Pure test-data encoder, not native publication or an ownership receipt. It
 // keeps the format/parser/corruption checks runnable on providers where native
 // publication is deliberately unavailable (including Darwin).
@@ -508,9 +495,6 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
     auto request=write_request(document(),scratch.path(),"fixture.ckarchive",7);
     const auto written = write_with_native_owners(request);
     auto bytes=encode_format_fixture(request.document);
-#if defined(__APPLE__)
-    check_macos_publication_unavailable(written,scratch.path()/request.archive_name);
-#else
     CK_CHECK(written.value());
     CK_CHECK(written.value()->entry_count == 3);
     CK_CHECK(written.value()->data_bytes == 4);
@@ -520,7 +504,6 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
     CK_CHECK(written.value()->published_path && ck::io::read_file(*written.value()->published_path, content));
     const auto native_bytes=std::as_bytes(std::span<const char>(content.data(),content.size()));
     CK_CHECK(std::equal(bytes.begin(),bytes.end(),native_bytes.begin(),native_bytes.end()));
-#endif
     const auto all=std::span<const std::byte>(bytes);
 
     const auto parsed = parse_archive_fixture(all);
@@ -556,14 +539,12 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
             CK_CHECK(std::to_integer<unsigned char>(all[data_begin + index]) == 0);
     }
 
-#if !defined(__APPLE__)
     const auto second = write_with_native_owners(request);
     CK_CHECK(!second.value());
     CK_CHECK(second.state() == ObservationState::Changed);
     std::string unchanged;
     CK_CHECK(ck::io::read_file(scratch.path()/request.archive_name,unchanged));
     CK_CHECK(digest_bytes(std::as_bytes(std::span<const char>(unchanged)))==digest_bytes(bytes));
-#endif
 }
 
 CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
@@ -576,25 +557,17 @@ CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
         {logical_bytes - 1, {std::byte{'z'}}}};
     auto request=write_request(std::move(sparse_document),scratch.path(),"material.ckarchive",8);
     const auto written = write_with_native_owners(request);
-#if defined(__APPLE__)
-    check_macos_publication_unavailable(written,scratch.path()/request.archive_name);
-#else
     CK_CHECK(written.value());
     CK_CHECK(written.value()->data_bytes == 4);
     CK_CHECK(written.value()->logical_size > logical_bytes);
     CK_CHECK(written.value()->digests_verified && written.value()->publication_confirmed);
-#endif
 }
 
 CK_TEST(volume_archive_writer_preserves_utf8_archive_name) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-unicode", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     auto request=write_request(document(),scratch.path(),"gr\xC3\xB6\xC3\x9F" "e.ckarchive",19);
     const auto written = write_with_native_owners(request);
-#if defined(__APPLE__)
-    check_macos_publication_unavailable(written,scratch.path()/request.archive_name);
-#else
     CK_CHECK(written.value());
-#endif
 #if defined(_WIN32)
     const auto directory = address(scratch.path());
     const auto name = NativeName::from_windows(u"gr\u00F6\u00DFe.ckarchive");
@@ -652,11 +625,6 @@ CK_TEST(volume_archive_writer_faults_at_each_journal_boundary_without_false_comp
         request.journal_limits.max_records=2+index;
         std::filesystem::path journal;
         const auto result=write_with_native_owners(request,&journal);
-#if defined(__APPLE__)
-        check_macos_publication_unavailable(result,destination/request.archive_name);
-        std::string journal_contents;
-        CK_CHECK(!ck::io::read_file(journal, journal_contents));
-#else
         std::string published;
         if(index==3) {
             CK_CHECK(result.value());
@@ -674,7 +642,6 @@ CK_TEST(volume_archive_writer_faults_at_each_journal_boundary_without_false_comp
         CK_CHECK(decoded.value()->journal->records().size()==2+index);
         CK_CHECK(decoded.value()->journal->records().back().state==last_durable[index]);
         CK_CHECK(decoded.value()->journal->records().back().state!=OperationJournalState::Complete);
-#endif
     }
 }
 
@@ -899,14 +866,6 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     CK_CHECK(reply.has_value());
-#if defined(__APPLE__)
-    CK_CHECK(reply->state==FilesVolumeArchiveState::Failed);
-    CK_CHECK(reply->error && reply->error->state==ObservationState::Unsupported);
-    CK_CHECK(reply->error->error.operation=="create_staging_file.fd_publication_unqualified");
-    std::string absent;
-    CK_CHECK(!ck::io::read_file(scratch.path()/"worker.ckarchive",absent));
-    CK_CHECK(std::filesystem::is_empty(scratch.path() / "journals"));
-#else
     CK_CHECK(reply->state == FilesVolumeArchiveState::Complete);
     CK_CHECK(reply->result && reply->result->publication_confirmed);
     std::size_t journal_files = 0;
@@ -970,7 +929,6 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
         }
     }
     CK_CHECK(journal_files == 1);
-#endif
     service.request_stop();
     service.join();
 }
@@ -1636,3 +1594,101 @@ CK_TEST(volume_archive_service_cancels_queued_request_before_native_build) {
     service.request_stop();
     service.join();
 }
+
+#if defined(__APPLE__)
+#include <sys/stat.h>
+CK_TEST(volume_archive_macos_apfs_sparse_create_and_verified_restore) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-apfs-restore", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    constexpr std::uint64_t kSparseSize = 4 * 1024 * 1024;
+    const auto to_bytes = [](std::string_view text) {
+        std::vector<std::byte> out;
+        out.reserve(text.size());
+        for (const char ch : text)
+            out.push_back(static_cast<std::byte>(ch));
+        return out;
+    };
+
+    FilesVolumeArchiveDocument doc;
+    doc.source.name = "APFS-Live-Fixture";
+    doc.source.mount_point = scratch.path().string();
+    doc.source.filesystem = "apfs";
+    doc.source.identity = "macos:apfs:live-fixture";
+    doc.source.archive.support = FilesVolumeArchiveSupport::LiveReadable;
+    doc.consistency = FilesVolumeArchiveConsistency::Live;
+    doc.entries.push_back({"nested", FilesVolumeArchiveEntryKind::Directory, 0, {}, {}, 0755});
+    doc.entries.push_back({"nested/readme.txt", FilesVolumeArchiveEntryKind::RegularFile, 18,
+                           {{0, to_bytes("hello apfs archive")}}, {}, 0644});
+    doc.entries.push_back({"sparse.bin", FilesVolumeArchiveEntryKind::RegularFile, kSparseSize,
+                           {{0, to_bytes("APFS-HEAD")}, {kSparseSize - 9, to_bytes("APFS-TAIL")}}, {}, 0640});
+    doc.entries.push_back({"link-to-readme", FilesVolumeArchiveEntryKind::Symlink, 0, {}, "nested/readme.txt", 0777});
+
+    const auto archive_dir = scratch.path() / "archives";
+    const auto restore_dir = scratch.path() / "restored";
+    std::filesystem::create_directories(archive_dir);
+    std::filesystem::create_directories(restore_dir);
+
+    auto req = write_request(doc, archive_dir, "apfs-sparse.ckarchive", 77);
+    const auto written = write_with_native_owners(req);
+    CK_CHECK(written.value());
+    if (!written.value())
+        return;
+    CK_CHECK(written.value()->publication == FilesVolumeArchivePublication::Durable);
+    CK_CHECK(written.value()->digests_verified && written.value()->publication_confirmed);
+    CK_CHECK(written.value()->published_path.has_value());
+
+    // Confirm genuine APFS sparse storage on disk (allocated blocks << logical size).
+    struct stat st{};
+    CK_CHECK(::stat(written.value()->published_path->c_str(), &st) == 0);
+    CK_CHECK(static_cast<std::uint64_t>(st.st_size) > kSparseSize);
+    CK_CHECK(static_cast<std::uint64_t>(st.st_blocks) * 512 < kSparseSize / 2);
+
+    // Read back the published archive, parse its manifest/extents, and restore every entry.
+    std::string raw;
+    CK_CHECK(ck::io::read_file(*written.value()->published_path, raw));
+    const auto all = std::as_bytes(std::span<const char>(raw.data(), raw.size()));
+    const auto parsed = parse_archive_fixture(all);
+    CK_CHECK(parsed.has_value());
+    if (!parsed)
+        return;
+    CK_CHECK(parsed->entries.size() == 4);
+
+    // Restore each entry from the verified archive and check exact contents.
+    const std::string paths[] = {"nested", "nested/readme.txt", "sparse.bin", "link-to-readme"};
+    for (std::size_t i = 0; i != parsed->entries.size(); ++i) {
+        const auto &entry = parsed->entries[i];
+        const auto out_path = restore_dir / paths[i];
+        if (entry.kind == 1) {
+            std::filesystem::create_directories(out_path);
+        } else if (entry.kind == 2) {
+            std::filesystem::create_directories(out_path.parent_path());
+            std::vector<char> buf(static_cast<std::size_t>(entry.logical_size), '\0');
+            for (const auto &ext : entry.extents) {
+                const auto src_off = static_cast<std::size_t>(parsed->data_offset + ext.archive_offset);
+                const auto dst_off = static_cast<std::size_t>(ext.source_offset);
+                const auto len = static_cast<std::size_t>(ext.length);
+                CK_CHECK(src_off + len <= raw.size() && dst_off + len <= buf.size());
+                std::memcpy(buf.data() + dst_off, raw.data() + src_off, len);
+            }
+            std::ofstream out(out_path, std::ios::binary);
+            out.write(buf.data(), static_cast<std::streamsize>(buf.size()));
+            CK_CHECK(out.good());
+        } else if (entry.kind == 3) {
+            std::filesystem::create_symlink("nested/readme.txt", out_path);
+        }
+    }
+
+    // Verify restored tree byte-for-byte against original document.
+    CK_CHECK(std::filesystem::is_directory(restore_dir / "nested"));
+    std::string restored_readme;
+    CK_CHECK(ck::io::read_file(restore_dir / "nested/readme.txt", restored_readme));
+    CK_CHECK(restored_readme == "hello apfs archive");
+    std::string restored_sparse;
+    CK_CHECK(ck::io::read_file(restore_dir / "sparse.bin", restored_sparse));
+    CK_CHECK(restored_sparse.size() == kSparseSize);
+    CK_CHECK(restored_sparse.substr(0, 9) == "APFS-HEAD");
+    CK_CHECK(restored_sparse.substr(kSparseSize - 9, 9) == "APFS-TAIL");
+    CK_CHECK(restored_sparse[4096] == '\0' && restored_sparse[kSparseSize / 2] == '\0');
+    CK_CHECK(std::filesystem::is_symlink(restore_dir / "link-to-readme"));
+    CK_CHECK(std::filesystem::read_symlink(restore_dir / "link-to-readme") == "nested/readme.txt");
+}
+#endif

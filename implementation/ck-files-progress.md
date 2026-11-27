@@ -1,5 +1,28 @@
 # Files implementation evidence
 
+## 2026-11-27 — macOS Option B (B-01 Darwin APFS staged no-replace publication + B-04 cross-volume move stability) and 3-OS qualification (`9828263`)
+
+Implemented Option B for macOS in `ck-core-fs-lib` (`9828263`) and enabled/verified it in `ck-files` (`docs/tools/ck-files.md`, `implementation/ck-files-plan.md`, `src/vision/files/tests/`, `tests/unit/ck_files/`):
+
+- **B-01 Darwin APFS staged no-replace publication** (`ck-core-fs-lib` `9828263`: `metadata_posix.cpp`, `native_archive_file.hpp`, `native_archive_write_job.cpp`, `transfer_preflight.cpp`, `reviewed_tree_plan.cpp`):
+  - Qualified local writable mounts reporting `VOL_CAP_INT_RENAME_EXCL` (`fstatfs` + `fgetattrlist`) for private `0600` staged creation (`O_CREAT | O_EXCL | O_NOFOLLOW`), durable `fsync` + `F_FULLFSYNC`, atomic `renameatx_np(..., RENAME_EXCL | RENAME_NOFOLLOW_ANY)` (preserving occupied targets with `EEXIST` -> `ObservationState::Changed`), post-publish `fstat`/`fstatat(..., AT_SYMLINK_NOFOLLOW)` identity receipt verification, and parent directory `fsync`.
+  - Enabled `NativeArchiveWriteJob::platform_supports_publication()` on Darwin and added `F_PUNCHHOLE` gap punching (`punch_native_archive_hole`) so APFS sparse archives below APFS's 16 MiB kernel threshold remain genuinely sparse on disk.
+  - Enabled APFS volume-archive Copy and ordinary staged file/tree Copy on macOS in `ck-files` (with the non-adversarial same-UID XNU threat-model boundary documented in `docs/tools/ck-files.md`, `docs/darwin-protected-publication.md`, and `docs/native-contracts.md`, without prominent UI warning banners).
+  - Fixed two latent `ReviewedTreePlanJob` issues exposed by positive macOS explicit-loss tree copy (`finish_progressive_io` guard when no progressive policy is bound; `record_created` preserving `metadata_digest` in explicit-loss mode).
+- **B-04 Darwin cross-volume Move source-retirement stability check** (`ck-core-fs-lib` `9828263`, `files_wp07_fault_and_crash_tests.cpp`, `test_files_operation_content_native.cpp`):
+  - Qualified `MoveSource | ContentRead` before/after `BasicMetadata` (`identity`, `link_count == 1`, `logical_size`, `modified`, `changed`, `mode`) stability verification on Darwin so stable cross-volume moves retire the source while modified or hard-linked sources fail closed with `ObservationState::Changed` and remain retained.
+- **Verification**:
+  - **`ck-core-fs-lib` (`9828263`)**:
+    - **macOS ARM64 Release** (ownership-enforcing APFS fixture root under `/Volumes/PRO-BLADE/tmp`): **74/74** CTests passed (`-j 1`), including newly enabled `native_staging` (staged publish, `EEXIST` + `discard_child`, 32 MiB APFS sparse archive + SHA-256 readback, B-04 move stability & mutation/hardlink fail-closed).
+    - **Linux ARM64 Release** (`ckdev`, ext4 fixture root): **10/10** targeted suites passed (`publication_preflight_contract`, `preflight_c11_native`, `native_regular_metadata_job`, `hardlink_source_capture`, `native_staging`, `regular_metadata`, `job_lifecycle`, `reviewed_tree_plan`, `sync_session`, `verified_copy_retry`).
+    - **Windows x64 Release** (`workstation` `V:` ReFS, MSVC 19.44.35228): **6/6** targeted suites passed (`publication_preflight_contract`, `preflight_c11_native`, `sync_session`, `actions_c`, `retained_target`, `verified_copy_retry`).
+  - **`ckUtilities`**:
+    - **macOS ARM64 Release** (AppleClang 21, `ckVision 2.1.0` `3d018210`, ownership-enforcing APFS fixture root): **8/8** targets passed (`ck_vision_files_tests_0..3`, `ck_vision_files_decoder_fuzz_tests`, `ck_vision_files_wp07_fault_and_crash_tests`, `ck_vision_files_parity_tests`, `test_files_operation_content_native`), including new live `volume_archive_macos_apfs_sparse_create_and_verified_restore` test.
+    - **macOS ARM64 ASan + UBSan** (`halt_on_error=1:print_stacktrace=1`): **6/6** targets passed (`ck_vision_files_tests_0..3`, `ck_vision_files_wp07_fault_and_crash_tests`, `test_files_operation_content_native`), zero sanitizer diagnostics.
+    - **Linux ARM64 Release** (`ckdev`, GCC 14.2.0 `-Werror`, ext4 fixture root): **6/6** targets passed (`ck_vision_files_tests_0..3`, `ck_vision_files_wp07_fault_and_crash_tests`, `test_files_operation_content_native`).
+    - **Windows x64 Release** (`workstation` `V:` ReFS, MSVC 19.44.35228): **6/6** targets passed (`ck_vision_files_tests_0..3`, `ck_vision_files_wp07_fault_and_crash_tests`, `test_files_operation_content_native`); shard 1 initially hit a transient `0xC0000409` on `files_app_move_acceptance_executes_after_review_and_refreshes_both_panes`, then passed shard 1 (`82/82`) plus `5/5` consecutive isolated runs.
+    - **Documentation**: `ckdocs build --config ckdocs.yml --strict` passed cleanly.
+
 ## 2026-11-27 — CP-07 through CP-14 Commander parity implementation and 3-OS + ASan/UBSan qualification
 
 Implemented and wired the CP-07–CP-13 Commander parity subsystems into `ck-files` (`src/vision/files/`, `src/vision/keymap/suite_keymap_catalog.cpp`, `docs/tools/ck-files.md`, `implementation/ck-files-parity-inventory.md`):

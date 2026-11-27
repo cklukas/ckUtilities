@@ -85,10 +85,9 @@ clipboard.
   bytes read back for verification. Verification covers the entire logical
   archive, including its sparse holes. **Esc** requests cancellation. The
   footer reports the outcome after the worker finishes.
-  Live archive creation has passed native Linux ext4, XFS, and Btrfs
-  fixtures. On macOS, volume browsing is available and archive Copy stays
-  disabled pending support for exact archive publication.
-  Changing focus during planning keeps the
+  Live archive creation has passed native Linux ext4, XFS, and Btrfs fixtures,
+  Windows NTFS/ReFS fixtures, and macOS APFS sparse archive creation + verified
+  restore fixtures. Changing focus during planning keeps the
   reviewed source and destination panes. The worker keeps the source mount
   root and destination directory open through approval. If either was
   replaced or the archive name was taken, Files asks for a new review.
@@ -170,7 +169,7 @@ clipboard.
 - Same-filesystem moves use identity-bound native rename when qualified.
   Cross-filesystem moves use copy, independent stream verification, durable
   destination publication, and only then qualified source retirement (using
-  Linux `F_SETLEASE` / Windows `FILE_SHARE_READ` exclusion plus live metadata
+  Linux `F_SETLEASE`, Windows `FILE_SHARE_READ`, or macOS before/after metadata
   stability verification; modified, hard-linked, or unqualified sources remain
   retained). Non-sync UI Copy/Move operations also acquire cross-process root
   leases when source and destination roots are disjoint, blocking competing
@@ -303,12 +302,20 @@ current macOS terminal verifier has
 qualified `Alt+X`, resize, and terminal-mode restoration for xterm-256color,
 xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
 and clean `Alt+X` shutdown for the installed utility set. The same three
-profiles pass for all ten utilities in the Linux aarch64 archive. A Linux
-terminal run copied a private ext4 mount into a sparse archive and verified the
-reconstructed file against the source hash. On macOS, Files disables volume
-Copy because the native archive writer lacks a qualified publication route.
-Native snapshot providers, archive restart reconciliation, and the remaining
-filesystem and desktop acceptance checks are still in qualification.
+profiles pass for all ten utilities in the Linux aarch64 archive. A Linux terminal run copied a private ext4 mount into a sparse archive and
+verified the reconstructed file against the source hash. On macOS APFS, ordinary
+and sparse volume-archive publication uses private `O_CREAT | O_EXCL | O_NOFOLLOW`
+staging, `fsync`/`F_FULLFSYNC`, atomic `renameatx_np` with
+`RENAME_EXCL | RENAME_NOFOLLOW_ANY`, post-publish identity verification, and
+parent directory `fsync`; cross-volume move source retirement verifies
+before/after `BasicMetadata` (`identity`, `link_count == 1`, size, timestamps,
+mode, and owner) and fails closed on change. Because macOS XNU provides no
+public held-descriptor link (`O_TMPFILE`/`linkat`) or kernel-enforced same-UID
+writer/rename exclusion lease, macOS publication and cross-volume move stability
+operate under a non-adversarial same-UID threat model (a concurrent adversarial
+process running under the same UID is outside the macOS isolation boundary).
+Native snapshot providers and the remaining filesystem and desktop acceptance
+checks are still in qualification.
 
 The operation plan is not a global transaction and does not promise rollback
 after a partial failure. Cancellation stops new work at a safe boundary and

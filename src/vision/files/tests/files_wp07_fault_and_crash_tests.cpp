@@ -1829,7 +1829,6 @@ CK_TEST(wp07_b04_cross_volume_move_retires_stable_source_and_retains_modified_or
     stable_move_open = Observation<std::unique_ptr<OpenedEntry>>::unavailable(
         ObservationState::Gone, {ErrorDomain::Adapter, 0, "release"});
 
-#if !defined(__APPLE__)
     auto stable_entry = take_obs(src_dir->open_child(make_name("stable.bin", u"stable.bin"), EntryAccess::MetadataOnly),
                                  "stable_entry");
     const auto stable_id = take_obs(take_obs(stable_entry->inspect_basic(), "stable_meta").identity, "stable_id");
@@ -1869,16 +1868,18 @@ CK_TEST(wp07_b04_cross_volume_move_retires_stable_source_and_retains_modified_or
     CK_CHECK(!std::filesystem::exists(src / "stable.bin"));
     CK_CHECK(std::filesystem::exists(dst / "stable.bin"));
     (void)jf1->finish_io();
-#else
-    (void)dst_dir;
-    (void)src_dir_id;
-    (void)dst_dir_id;
-    // On macOS APFS (B-01), verify MoveSource detects concurrent content/metadata change and refuses retirement.
-    auto watched = take_obs(src_dir->open_child(make_name("stable.bin", u"stable.bin"),
+
+#if defined(__APPLE__)
+    // Also verify MoveSource detects concurrent content/metadata change and fails closed with Changed.
+    {
+        std::ofstream out(src / "watched.bin", std::ios::binary);
+        out << "watched-payload";
+    }
+    auto watched = take_obs(src_dir->open_child(make_name("watched.bin", u"watched.bin"),
                                                 EntryAccess::ContentRead | EntryAccess::MoveSource), "watched");
     CK_CHECK(watched->qualify_stable_content().value());
     {
-        std::ofstream mutate(src / "stable.bin", std::ios::binary | std::ios::app);
+        std::ofstream mutate(src / "watched.bin", std::ios::binary | std::ios::app);
         mutate << "-mutated";
     }
     const auto after_mutate = watched->qualify_stable_content();

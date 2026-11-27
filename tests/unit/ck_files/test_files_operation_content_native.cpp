@@ -50,25 +50,6 @@ NativeName name(const char* text) {
     return *NativeName::from_posix(text);
 #endif
 }
-#if defined(__APPLE__)
-void expect_mac_publication_failure(const std::optional<UnavailableObservation>& failure) {
-    CK_CHECK(failure && failure->state == ObservationState::Unsupported);
-    CK_CHECK(failure && failure->error.domain == ErrorDomain::Adapter);
-    CK_CHECK(failure && failure->error.code == static_cast<std::int64_t>(AdapterError::UnsupportedQuery));
-    CK_CHECK(failure && failure->error.operation == "create_staging_file.fd_publication_unqualified");
-}
-void expect_mac_preflight_failure(const UnavailableObservation* failure) {
-    CK_CHECK(failure && failure->state == ObservationState::Unsupported);
-    CK_CHECK(failure && failure->error.domain == ErrorDomain::Adapter);
-    CK_CHECK(failure && failure->error.code == static_cast<std::int64_t>(AdapterError::UnsupportedQuery));
-    CK_CHECK(failure && failure->error.operation == "preflight.fd_publication_unqualified");
-}
-void expect_unpublished_journal(const OperationJournal& journal, OperationJournalState final_state) {
-    CK_CHECK(journal.state(0) == final_state);
-    for (const auto& record : journal.records())
-        CK_CHECK(record.state == OperationJournalState::Planned || record.state == OperationJournalState::Prepared);
-}
-#endif
 }
 
 CK_TEST(native_operation_staging_file_is_created_relative_to_held_directory_and_roundtrips_content) {
@@ -252,6 +233,12 @@ CK_TEST(native_operation_staging_cleanup_requires_handle_bound_disposition) {
     if (fs::exists(scratch.path() / "owned-staging.bin"))
         throw std::runtime_error("staging discard remained present");
     CK_CHECK(discarded.value() && !fs::exists(scratch.path() / "owned-staging.bin"));
+#elif defined(__APPLE__)
+    // Under Option B on macOS APFS, named staging cleanup verifies exact
+    // identity and single-link regular-file shape before unlinking.
+    staging.reset();
+    const auto discarded = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
+    CK_CHECK(discarded.value() && *discarded.value() && !fs::exists(scratch.path() / "owned-staging.bin"));
 #else
     const auto discarded = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
     staging.reset();
@@ -287,11 +274,7 @@ CK_TEST(native_operation_stream_copy_composes_held_source_and_staging_handles) {
     CK_CHECK(read.complete && read.bytes.size() == job->result().source_bytes);
 }
 
-#if defined(__APPLE__)
-CK_TEST(native_operation_copy_job_refuses_unqualified_mac_publication_before_metadata_replay)
-#else
 CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replacement)
-#endif
 {
     const ck::testing::ScratchDirectory scratch("files-native-operation-copy-job",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
@@ -363,22 +346,6 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
          job->state() != OperationExecutionState::NeedsReconciliation; ++step)
         job->advance();
 
-#if defined(__APPLE__)
-    CK_CHECK(job->state() == OperationExecutionState::NeedsReconciliation);
-    expect_mac_publication_failure(job->result().failure);
-    CK_CHECK(job->progress().observed_bytes == 0 && metadata_preparations == 0);
-    CK_CHECK(fs::is_empty(destination_directory_path));
-    expect_unpublished_journal(*journal, OperationJournalState::Prepared);
-    const auto after = take(source->inspect_basic());
-    CK_CHECK(compare_identity(take(source_metadata.identity), take(after.identity)) == IdentityComparison::Same);
-    const auto retained = take(source->read_content({1024}, 0));
-    const std::string_view payload = "native operation copy job";
-    const auto expected = std::as_bytes(std::span(payload.data(), payload.size()));
-    CK_CHECK(retained.complete && retained.bytes == NativeBytes(expected.begin(), expected.end()));
-    const auto records = journal->records().size();
-    for (unsigned poll = 0; poll != 3; ++poll) CK_CHECK(job->advance() == OperationExecutionState::NeedsReconciliation);
-    CK_CHECK(journal->records().size() == records && metadata_preparations == 0);
-#else
     if (job->state() != OperationExecutionState::Complete) {
         std::string detail = "native copy execution state " + std::to_string(static_cast<int>(job->state())) +
             " bytes " + std::to_string(job->progress().observed_bytes) + " records";
@@ -414,7 +381,6 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
                  evidence.value()->destination_identity.matches_live(destination_identity));
     }
     CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
-#endif
 }
 
 CK_TEST(native_operation_move_batch_renames_only_after_identity_revalidation) {
@@ -622,11 +588,7 @@ CK_TEST(native_operation_recovery_cleanup_rejects_substituted_staging_identity) 
     CK_CHECK(original_content.bytes == std::vector<std::byte>(original_byte.begin(), original_byte.end()));
 }
 
-#if defined(__APPLE__)
-CK_TEST(native_operation_copy_batch_preserves_mac_refusal_and_unstarted_item_receipts)
-#else
 CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts)
-#endif
 {
     const ck::testing::ScratchDirectory scratch("files-native-operation-copy-batch",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
@@ -650,9 +612,6 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts)
     const auto source_parent_identity = take(source_parent->identity());
     const auto destination_identity = take(destination->identity());
 
-#if defined(__APPLE__)
-    const auto source_before = ck::testing::observe_files_fixture_tree(source_directory_path);
-#endif
     auto make_job = [&](const char* source_text, const char* staging_text, const char* destination_text,
                         const char* journal_text, std::byte journal_byte) {
         const auto source_name = name(source_text);
@@ -721,18 +680,6 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts)
          batch->state() != OperationBatchState::NeedsReconciliation; ++step)
         batch->advance();
 
-#if defined(__APPLE__)
-    CK_CHECK(batch->state() == OperationBatchState::NeedsReconciliation && batch->result().items.size() == 2);
-    CK_CHECK(batch->result().items[0].outcome == OperationItemOutcome::NeedsReconciliation);
-    CK_CHECK(batch->result().items[1].outcome == OperationItemOutcome::Pending);
-    expect_mac_publication_failure(batch->result().items[0].failure);
-    CK_CHECK(batch->progress().observed_bytes == 0 && fs::is_empty(destination_directory_path));
-    CK_CHECK(ck::testing::observe_files_fixture_tree(source_directory_path) == source_before);
-    for (unsigned poll = 0; poll != 3; ++poll) CK_CHECK(batch->advance() == OperationBatchState::NeedsReconciliation);
-    batch.reset();
-    expect_unpublished_journal(*ck::testing::read_files_fixture_journal(scratch.path() / "first.journal"), OperationJournalState::Prepared);
-    expect_unpublished_journal(*ck::testing::read_files_fixture_journal(scratch.path() / "second.journal"), OperationJournalState::Planned);
-#else
     CK_CHECK(batch->state() == OperationBatchState::Complete);
     CK_CHECK(batch->result().items.size() == 2);
     CK_CHECK(batch->result().items[0].outcome == OperationItemOutcome::Complete);
@@ -771,14 +718,9 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts)
             CK_CHECK(publication_check.value() && *publication_check.value());
         }
     }
-#endif
 }
 
-#if defined(__APPLE__)
-CK_TEST(native_operation_copy_batch_factory_mac_loss_consent_does_not_qualify_publication)
-#else
 CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_loss_consent)
-#endif
 {
     const ck::testing::ScratchDirectory scratch("files-native-operation-copy-factory",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
@@ -821,12 +763,6 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
              refused_created.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::ProviderReviewRequired) &&
              refused_created.unavailable_detail()->error.operation == "metadata_replay.complete_requires_initial_sys_admin");
     CK_CHECK(refused_journal_calls == 0 && fs::is_empty(destination_directory_path));
-#elif defined(__APPLE__)
-    // Preflight refuses unqualified Darwin same-UID held-FD publication before
-    // creating any journal or staging artifact.
-    CK_CHECK(!refused_created.value());
-    expect_mac_preflight_failure(refused_created.unavailable_detail());
-    CK_CHECK(refused_journal_calls == 0 && fs::is_empty(destination_directory_path));
 #else
     // CompleteMetadataV1 is the default; without loss consent or full-security
     // capture authority, source preflight refuses before creating a journal or
@@ -853,11 +789,6 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     request.policy.copy_limits.chunk_bytes = 5;
     request.policy.copy_limits.max_bytes = 1024;
     auto created = create_native_operation_copy_batch(std::move(request));
-#if defined(__APPLE__)
-    CK_CHECK(!created.value());
-    expect_mac_preflight_failure(created.unavailable_detail());
-    CK_CHECK(consented_journal_calls == 0 && fs::is_empty(destination_directory_path));
-#else
     CK_CHECK(created.value());
     if (!created.value()) return;
     auto batch = std::move(created).take_value();
@@ -870,8 +801,6 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     const auto copied = take(destination->open_child(name("first-copy-consented.bin"), EntryAccess::ContentRead));
     const auto content = take(copied->read_content({1024}, 0));
     CK_CHECK(content.complete && content.bytes.size() == std::string("held factory payload").size());
-
-#endif
 
     fs::create_directory(source_directory_path / "nested");
     auto directory_source = take(HeldChild::observe_with_access(source_parent, name("nested"), EntryAccess::MetadataOnly));
@@ -888,11 +817,7 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     CK_CHECK(!rejected_directory.value() && rejected_directory.state() == ObservationState::Unsupported);
 }
 
-#if defined(__APPLE__)
-CK_TEST(native_operation_copy_tree_preserves_mac_source_and_unpublished_staging)
-#else
 CK_TEST(native_operation_copy_tree_stages_exact_inventory_and_publishes_root_no_replace)
-#endif
 {
     const ck::testing::ScratchDirectory scratch("files-native-operation-copy-tree",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
@@ -945,19 +870,7 @@ CK_TEST(native_operation_copy_tree_stages_exact_inventory_and_publishes_root_no_
         ++tree_journal_calls;
         return open_native_operation_journal_file(root, basename, create_new);
     };
-#if defined(__APPLE__)
-    const auto source_before = ck::testing::observe_files_fixture_tree(source_path);
-    const auto target_before = ck::testing::observe_files_fixture_tree(destination_path);
-#endif
     auto created = create_native_operation_copy_tree(std::move(request));
-#if defined(__APPLE__)
-    CK_CHECK(!created.value());
-    expect_mac_preflight_failure(created.unavailable_detail());
-    CK_CHECK(tree_journal_calls == 0);
-    CK_CHECK(!fs::exists(destination_path / "source-copy"));
-    CK_CHECK(ck::testing::observe_files_fixture_tree(destination_path) == target_before);
-    CK_CHECK(ck::testing::observe_files_fixture_tree(source_path) == source_before);
-#else
     CK_CHECK(created.value());
     if (!created.value()) return;
     auto job = std::move(created).take_value();
@@ -1005,14 +918,9 @@ CK_TEST(native_operation_copy_tree_stages_exact_inventory_and_publishes_root_no_
     CK_CHECK(collision_job->state() == OperationExecutionState::Failed);
     CK_CHECK(fs::is_regular_file(destination_path / "source-copy" / "root.bin"));
     CK_CHECK(fs::is_directory(destination_path / ".ck-tree-staging-74000000000000000000000000000000-0"));
-#endif
 }
 
-#if defined(__APPLE__)
-CK_TEST(native_operation_move_tree_refuses_mac_publication_before_source_retirement)
-#else
 CK_TEST(native_operation_move_tree_publishes_then_retains_source_without_stability_proof)
-#endif
 {
     const ck::testing::ScratchDirectory scratch("files-native-operation-move-tree",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
@@ -1060,28 +968,7 @@ CK_TEST(native_operation_move_tree_publishes_then_retains_source_without_stabili
         if (!tree_journal_name) tree_journal_name = basename;
         return open_native_operation_journal_file(root, basename, create_new);
     };
-#if !defined(_WIN32)
-    const auto source_before = ck::testing::observe_files_fixture_tree(source_path);
-    const auto target_before = ck::testing::observe_files_fixture_tree(destination_path);
-#endif
     auto created = create_native_operation_copy_tree(std::move(request));
-#if !defined(_WIN32)
-    CK_CHECK(!created.value());
-#if defined(__APPLE__)
-    expect_mac_preflight_failure(created.unavailable_detail());
-#else
-    CK_CHECK(created.state() == ObservationState::Unsupported);
-    CK_CHECK(created.unavailable_detail() &&
-             created.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
-             created.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::UnsupportedQuery) &&
-             created.unavailable_detail()->error.operation == "preflight.source_exclusion_unqualified");
-#endif
-    CK_CHECK(!tree_journal_name.has_value());
-    CK_CHECK(!fs::exists(destination_path / "source-move"));
-    CK_CHECK(ck::testing::observe_files_fixture_tree(destination_path) == target_before);
-    CK_CHECK(ck::testing::observe_files_fixture_tree(source_path) == source_before);
-    return;
-#else
     CK_CHECK(created.value());
     if (!created.value()) return;
     auto job = std::move(created).take_value();
@@ -1120,7 +1007,6 @@ CK_TEST(native_operation_move_tree_publishes_then_retains_source_without_stabili
     }
     CK_CHECK(found && !loaded.tail);
     CK_CHECK(committed && loaded.journal->state(0) == OperationJournalState::RetainedSource);
-#endif
 }
 
 #if defined(__APPLE__)

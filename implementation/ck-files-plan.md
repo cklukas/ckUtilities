@@ -1,42 +1,46 @@
 # Files (`ck-files`) — implementation work packages
 
-The WP-00 and WP-01 checkpoints are complete. WP-02 remains open.
+The WP-00 and WP-01 checkpoints are complete. WP-02, WP-04, and WP-05 core
+native workflows are implemented and qualified across macOS ARM64 (APFS),
+Linux ARM64 (ext4/XFS/Btrfs), and Windows x64 (`V:` ReFS/NTFS).
 Files uses ckVision 2.1.0. Native Linux xterm checks cover Right-to-accept,
 pane-local bookmarks and refresh recovery, volume browsing, read-only command
 availability, and sparse archive round trips on ext4, XFS, and Btrfs.
-A macOS PTY confirmed the
-read-only command behavior and the archive-publication refusal on a native APFS
-fixture. A real macOS terminal window verified two-pane navigation,
-Right-to-accept, previews, and volume navigation. Safe APFS archive publication
-and the Windows workstation tests remain open. Windows v143 qualification
-requires the `V:` development drive.
+On macOS APFS, Option B closes B-01 (staged no-replace publication via
+`O_CREAT | O_EXCL | O_NOFOLLOW`, `fsync`/`F_FULLFSYNC`,
+`renameatx_np(RENAME_EXCL | RENAME_NOFOLLOW_ANY)`, `F_PUNCHHOLE` sparse holes,
+post-publish identity verification, and parent `fsync`) and B-04 (cross-volume
+move before/after `BasicMetadata` stability verification) under a documented
+non-adversarial same-UID XNU threat model. A real macOS terminal window
+verified two-pane navigation, Right-to-accept, previews, and volume navigation,
+and live APFS sparse volume-archive creation + verified restore is tested.
+Windows v143 qualification runs on the `V:` development drive.
 The [implementation evidence](ck-files-progress.md) names the exact source
 revisions and the scope of each native and sanitizer run.
 
-Updated 2026-11-25.
+Updated 2026-11-27.
 Original baseline review:
 `81aaf009db23ca8558211722107bd2122351e565` (2026-10-23).
 
-Execution: continue WP-02 implementation and its acceptance gates before
-claiming completion. See [implementation evidence](ck-files-progress.md),
+Execution: continue remaining WP-03 strict preservation and release-rehearsal
+acceptance gates before claiming final release sign-off. See
+[implementation evidence](ck-files-progress.md),
 [behavioral and adapter contracts](ck-files-contracts.md)
 and the [current SDK baseline](../docs/migration/ckvision-baseline.md).
 
 ## Product commitment
 
 The complementary [shared transfer-recovery plan](ck-files-transfer-recovery-plan.md)
-specifies backend prerequisites shared by filesystem consumers. Its B-00–06
-packages close backend gaps and its R-01–12 matrix makes interrupted moves and
-repeated submissions explicit. It does not change this application's ckVision
-frontend or close the cross-platform gates. Current Mac strong copy publication,
-source retirement, and usable restart reconciliation remain open. Historical
-checked implementation tasks below are not blanket native qualification or
-proof of an end-to-end recovery workflow. The current preservation preflight
-adds preliminary policy eligibility and early admission across backend consumers;
-it never reports achieved preservation. WP-03 still requires complete source and
-destination preservation review, WP-04 still requires restart/repeat
-reconciliation, and WP-05 still requires qualified retirement. See the shared
-plan and latest progress entry for exact coverage.
+specifies backend prerequisites shared by filesystem consumers. Its B-01–B-05
+packages are now implemented and wired across macOS (Option B non-adversarial
+same-UID model for B-01/B-04), Linux (`O_TMPFILE`+`linkat`+`F_SETLEASE`), and
+Windows (`FILE_SHARE_READ`+`FileRenameInfoEx`), including in-app recovery
+execution (B-02), transfer reconciliation (B-03), cross-volume move source
+retirement (B-04), and cross-process root leases (B-05). Historical checked
+implementation tasks below are not blanket native qualification. WP-03 still
+requires complete source and destination preservation review where OS providers
+restrict security/atime coverage, and full release rehearsal remains open. See
+the shared plan and latest progress entry for exact coverage.
 
 Build a professional, keyboard-first, two-pane file manager for ckUtilities,
 using the current ckVision SDK and the suite's native application conventions.
