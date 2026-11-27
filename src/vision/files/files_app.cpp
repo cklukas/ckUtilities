@@ -5568,6 +5568,10 @@ struct FilesApp::State {
                      reply.error->error.operation == "preflight.fd_publication_unqualified"))
                     detail += ": verified file publication is unavailable on this platform";
                 else if (reply.error->state == ck::files::ObservationState::Unsupported &&
+                         (reply.error->error.operation == "staging.darwin_nonlocal_mount" ||
+                          reply.error->error.operation == "staging.darwin_rename_excl_unsupported"))
+                    detail += ": verified file publication requires a local volume supporting exclusive atomic rename";
+                else if (reply.error->state == ck::files::ObservationState::Unsupported &&
                          reply.error->error.operation == "preflight.source_exclusion_unqualified")
                     detail += ": verified source retirement is unavailable on this platform";
                 else if (reply.error->error.operation == "files_execution.keep_both_occupied")

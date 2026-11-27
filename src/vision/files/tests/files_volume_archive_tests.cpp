@@ -1,4 +1,5 @@
 #include "files_volume_archive.hpp"
+#include "files_volume_archive_restore.hpp"
 #include "native_filesystem.hpp"
 #include "prepared_journal_root.hpp"
 #include "ck/file_io.hpp"
@@ -250,7 +251,7 @@ Observation<FilesVolumeArchiveWriteResult> write_with_native_owners(
 
 // Pure test-data encoder, not native publication or an ownership receipt. It
 // keeps the format/parser/corruption checks runnable on providers where native
-// publication is deliberately unavailable (including Darwin).
+// publication is deliberately unavailable.
 std::vector<std::byte> encode_format_fixture(const FilesVolumeArchiveDocument &value) {
     std::vector<std::byte> manifest;
     append_string(manifest,value.source.identity);append_string(manifest,value.source.name);
@@ -1642,42 +1643,29 @@ CK_TEST(volume_archive_macos_apfs_sparse_create_and_verified_restore) {
     CK_CHECK(static_cast<std::uint64_t>(st.st_size) > kSparseSize);
     CK_CHECK(static_cast<std::uint64_t>(st.st_blocks) * 512 < kSparseSize / 2);
 
-    // Read back the published archive, parse its manifest/extents, and restore every entry.
-    std::string raw;
-    CK_CHECK(ck::io::read_file(*written.value()->published_path, raw));
-    const auto all = std::as_bytes(std::span<const char>(raw.data(), raw.size()));
-    const auto parsed = parse_archive_fixture(all);
-    CK_CHECK(parsed.has_value());
-    if (!parsed)
+    // Run the real production restore pipeline (inspect -> plan -> restore -> verify).
+    const auto archive_native = NativeAbsolutePath::from_host(*written.value()->published_path);
+    const auto restore_native = NativeAbsolutePath::from_host(restore_dir);
+    CK_CHECK(archive_native.value() && restore_native.value());
+    if (!archive_native.value() || !restore_native.value())
         return;
-    CK_CHECK(parsed->entries.size() == 4);
+    const auto plan = plan_volume_archive_restore(*archive_native.value(), *restore_native.value());
+    CK_CHECK(plan.valid && plan.inspection.valid);
+    CK_CHECK(plan.inspection.entries.size() == 4);
+    CK_CHECK(plan.inspection.directory_count == 1 && plan.inspection.regular_file_count == 2 &&
+             plan.inspection.sparse_file_count == 1 && plan.inspection.symlink_count == 1);
+    if (!plan.valid)
+        return;
 
-    // Restore each entry from the verified archive and check exact contents.
-    const std::string paths[] = {"nested", "nested/readme.txt", "sparse.bin", "link-to-readme"};
-    for (std::size_t i = 0; i != parsed->entries.size(); ++i) {
-        const auto &entry = parsed->entries[i];
-        const auto out_path = restore_dir / paths[i];
-        if (entry.kind == 1) {
-            std::filesystem::create_directories(out_path);
-        } else if (entry.kind == 2) {
-            std::filesystem::create_directories(out_path.parent_path());
-            std::vector<char> buf(static_cast<std::size_t>(entry.logical_size), '\0');
-            for (const auto &ext : entry.extents) {
-                const auto src_off = static_cast<std::size_t>(parsed->data_offset + ext.archive_offset);
-                const auto dst_off = static_cast<std::size_t>(ext.source_offset);
-                const auto len = static_cast<std::size_t>(ext.length);
-                CK_CHECK(src_off + len <= raw.size() && dst_off + len <= buf.size());
-                std::memcpy(buf.data() + dst_off, raw.data() + src_off, len);
-            }
-            std::ofstream out(out_path, std::ios::binary);
-            out.write(buf.data(), static_cast<std::streamsize>(buf.size()));
-            CK_CHECK(out.good());
-        } else if (entry.kind == 3) {
-            std::filesystem::create_symlink("nested/readme.txt", out_path);
-        }
-    }
+    const auto restored = restore_volume_archive(plan, /*allow_overwrite=*/false);
+    CK_CHECK(restored.ok && !restored.cancelled);
+    CK_CHECK(restored.restored_directories == 1);
+    CK_CHECK(restored.restored_files == 2);
+    CK_CHECK(restored.restored_sparse_files == 1);
+    CK_CHECK(restored.restored_symlinks == 1);
+    CK_CHECK(restored.verified_bytes == 18 + kSparseSize);
 
-    // Verify restored tree byte-for-byte against original document.
+    // Verify restored tree byte-for-byte against original document (including real symlink target).
     CK_CHECK(std::filesystem::is_directory(restore_dir / "nested"));
     std::string restored_readme;
     CK_CHECK(ck::io::read_file(restore_dir / "nested/readme.txt", restored_readme));
