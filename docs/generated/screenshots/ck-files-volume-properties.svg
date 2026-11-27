@@ -1630,8 +1630,8 @@
 <text x="117" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Backspace Parent folder</text>
 <text x="342" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">F4 Switch pane</text>
 <text x="486" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Insert Mark</text>
-<text x="603" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Esc Cancel activity</text>
-<text x="792" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Inspect archive recovery</text>
+<text x="603" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Cancel activity</text>
+<text x="756" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Inspect archive recovery</text>
 <g id="raster-plane">
 </g>
 </svg>

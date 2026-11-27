@@ -111,3 +111,53 @@ CK_TEST(files_operation_review_dialog_binds_reviewed_keep_both_native_name) {
     CK_CHECK(dialog.completed() && receipt && receipt->action == ConsentAction::KeepBoth &&
         receipt->keep_both_names.size() == 1 && receipt->keep_both_names.front().display_name() == "copy");
 }
+
+CK_TEST(files_operation_review_dialog_omits_zero_issues_and_updates_live_on_name_edit) {
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+    ckv::ui::Application application(terminal, clock);
+    SuiteShell shell(application, {.application_name = "Files", .about_text = "Files test"});
+    FilesOperationReviewDialog dialog(application, shell.desktop(), shell.roles(), model_with_conflict(),
+        NameEncoding::PosixBytes, [](Observation<ConsentReceipt>) {});
+    application.step(clock.now_nanos());
+
+    std::vector<ckv::widgets::Label *> labels;
+    std::vector<ckv::widgets::InputLine *> inputs;
+    find_views(application.root(), labels);
+    find_views(application.root(), inputs);
+
+    ckv::widgets::Label *summary = nullptr;
+    for (auto *lbl : labels) {
+        if (lbl->text().find("Review required") != std::string::npos)
+            summary = lbl;
+    }
+    CK_CHECK(summary != nullptr);
+    CK_CHECK(summary->text().find("conflict: 1") != std::string::npos);
+    CK_CHECK(summary->text().find("data loss: 0") == std::string::npos);
+    CK_CHECK(summary->text().find("security changes: 0") == std::string::npos);
+    CK_CHECK(summary->text().find("metadata loss: 0") == std::string::npos);
+    CK_CHECK(summary->text().find("representation changes: 0") == std::string::npos);
+    CK_CHECK(summary->text().find("uncertain: 0") == std::string::npos);
+
+    ckv::widgets::InputLine *name = nullptr;
+    for (auto *input : inputs) {
+        bool inside_combo = false;
+        for (auto *parent = input->parent(); parent; parent = parent->parent())
+            inside_combo = inside_combo || dynamic_cast<ckv::widgets::ComboBox *>(parent) != nullptr;
+        if (!inside_combo)
+            name = input;
+    }
+    CK_CHECK(name != nullptr);
+    application.set_focus(name);
+    CK_CHECK(application.dispatch(ckv::TextEvent{"renamed-copy.txt", false}));
+    application.step(clock.now_nanos());
+    CK_CHECK(summary->text().find("conflict:") == std::string::npos);
+    CK_CHECK(summary->text().find("Ready") != std::string::npos);
+
+    // Clearing the name restores the active conflict live.
+    for (int i = 0; i < 20; ++i)
+        application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Backspace, ckv::Modifier::None, ""}});
+    application.step(clock.now_nanos());
+    CK_CHECK(summary->text().find("conflict: 1") != std::string::npos);
+    dialog.close();
+}

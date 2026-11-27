@@ -70,13 +70,31 @@ std::string conflict_kind(DestinationConflictKind value) {
     return "unknown destination conflict";
 }
 
-std::string summary_text(const OperationReviewSummary &summary) {
-    return "Review required — data loss: " + std::to_string(summary.data_loss) +
-        ", security changes: " + std::to_string(summary.security_change) +
-        ", metadata loss: " + std::to_string(summary.metadata_loss) +
-        ", representation changes: " + std::to_string(summary.representation_change) +
-        ", uncertain: " + std::to_string(summary.uncertain) +
-        ", conflicts: " + std::to_string(summary.conflicts) + ".";
+std::string summary_text(const OperationReviewSummary &summary, std::size_t active_conflicts) {
+    std::vector<std::string> parts;
+    if (summary.data_loss > 0)
+        parts.push_back("data loss: " + std::to_string(summary.data_loss));
+    if (summary.security_change > 0)
+        parts.push_back("security changes: " + std::to_string(summary.security_change));
+    if (summary.metadata_loss > 0)
+        parts.push_back("metadata loss: " + std::to_string(summary.metadata_loss));
+    if (summary.representation_change > 0)
+        parts.push_back("representation changes: " + std::to_string(summary.representation_change));
+    if (summary.uncertain > 0)
+        parts.push_back("uncertain: " + std::to_string(summary.uncertain));
+    if (active_conflicts > 0)
+        parts.push_back(active_conflicts == 1 ? "conflict: 1"
+                                              : "conflicts: " + std::to_string(active_conflicts));
+    if (parts.empty())
+        return "Ready — no preservation issues or conflicts for the current selection.";
+    std::string out = "Review required — ";
+    for (std::size_t i = 0; i < parts.size(); ++i) {
+        if (i > 0)
+            out += ", ";
+        out += parts[i];
+    }
+    out += '.';
+    return out;
 }
 
 std::string bind_error(const UnavailableObservation &detail) {
@@ -181,6 +199,13 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
     std::size_t field_count = 0;
     std::vector<ck::files::ConsentAction> actions;
     std::optional<ck::files::ConsentReceipt> pending_receipt;
+    std::string initial_summary_text;
+    std::vector<std::string> conflict_item_names;
+    std::vector<std::string> conflict_kind_texts;
+    std::vector<std::string> conflict_initial_labels;
+    ckv::widgets::Label *summary_label = nullptr;
+    std::vector<ckv::widgets::Label *> conflict_labels;
+    std::vector<ckv::widgets::InputLine *> name_inputs;
     bool finished = false;
     bool delivered = false;
 
@@ -284,7 +309,8 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         descriptor.field_description_rows = 2;
         if (scope)
             add_files_transfer_scope(descriptor, *scope, application, desktop, roles);
-        descriptor.fields.push_back({.label = summary_text(model->summary()), .kind = FieldKind::Note});
+        initial_summary_text = summary_text(model->summary(), model->summary().conflicts);
+        descriptor.fields.push_back({.label = initial_summary_text, .kind = FieldKind::Note});
         const bool keep_both = std::find(actions.begin(), actions.end(), ConsentAction::KeepBoth) != actions.end();
         if (supports_action && !model->conflict_rows().empty()) {
             const bool skip_supported = std::find(actions.begin(), actions.end(), ConsentAction::SkipConflict) != actions.end();
@@ -310,13 +336,17 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
             descriptor.fields.push_back({.label = "I reviewed all listed preservation losses", .kind = FieldKind::Check});
         }
         for (const auto &row : model->conflict_rows()) {
-            descriptor.fields.push_back({.label = files_review_literal(item_label(row.conflict.item)) + " · " +
-                                             conflict_kind(row.conflict.kind),
-                .kind = FieldKind::Note});
+            const std::string item_name = item_label(row.conflict.item);
+            const std::string kind_str = conflict_kind(row.conflict.kind);
+            const std::string row_label = files_review_literal(item_name) + " · " + kind_str;
+            conflict_item_names.push_back(item_name);
+            conflict_kind_texts.push_back(kind_str);
+            conflict_initial_labels.push_back(row_label);
+            descriptor.fields.push_back({.label = row_label, .kind = FieldKind::Note});
             if (!keep_both)
                 continue;
             FieldDescriptor name;
-            name.label = "New name for " + files_review_literal(item_label(row.conflict.item));
+            name.label = "New name for " + files_review_literal(item_name);
             name.validate = [](const std::string &value) { return value.size() <= 64 * 1024; };
             name.description = "Used only with Keep both. Enter one native basename, never a path.";
             descriptor.fields.push_back(std::move(name));
@@ -375,6 +405,77 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         };
     }
 
+    void bind_live_controls(ckv::ui::View *root) {
+        if (!root)
+            return;
+        if (auto *lbl = dynamic_cast<Label *>(root)) {
+            if (!summary_label && lbl->text() == initial_summary_text) {
+                summary_label = lbl;
+            } else if (conflict_labels.size() < conflict_initial_labels.size() &&
+                       lbl->text() == conflict_initial_labels[conflict_labels.size()]) {
+                conflict_labels.push_back(lbl);
+            }
+        } else if (auto *inp = dynamic_cast<InputLine *>(root)) {
+            if (name_inputs.size() < name_fields.size())
+                name_inputs.push_back(inp);
+        }
+        for (const auto &child : root->children())
+            bind_live_controls(child.get());
+    }
+
+    void refresh_live_issues() {
+        if (finished || !window || window_lifetime.expired())
+            return;
+        const std::size_t conflict_count = model->conflict_rows().size();
+        if (conflict_count == 0 || name_inputs.size() != conflict_count) {
+            if (summary_label)
+                summary_label->set_text(summary_text(model->summary(), model->summary().conflicts));
+            return;
+        }
+        std::vector<std::optional<NativeName>> parsed_names(conflict_count);
+        for (std::size_t i = 0; i < conflict_count; ++i) {
+            const std::string &val = name_inputs[i]->text();
+            if (val.empty())
+                continue;
+            auto parsed = parse_name(val, destination_encoding);
+            if (parsed && (!parsed->windows_units() ||
+                           check_win32_component(*parsed->windows_units()).ordinary_component())) {
+                parsed_names[i] = std::move(*parsed);
+            }
+        }
+        std::size_t active_conflicts = 0;
+        for (std::size_t i = 0; i < conflict_count; ++i) {
+            const std::string &val = name_inputs[i]->text();
+            bool duplicate = false;
+            if (parsed_names[i]) {
+                for (std::size_t j = 0; j < conflict_count; ++j) {
+                    if (j != i && parsed_names[j] && *parsed_names[j] == *parsed_names[i]) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+            }
+            const bool same_as_source = !val.empty() && val == conflict_item_names[i];
+            const bool resolved = parsed_names[i].has_value() && !duplicate && !same_as_source;
+            if (!resolved)
+                ++active_conflicts;
+            if (i < conflict_labels.size() && conflict_labels[i]) {
+                if (resolved) {
+                    conflict_labels[i]->set_text(files_review_literal(conflict_item_names[i]) +
+                                                 " · will save as " + files_review_literal(val));
+                } else if (!val.empty()) {
+                    conflict_labels[i]->set_text(files_review_literal(conflict_item_names[i]) + " · " +
+                                                 conflict_kind_texts[i] + " (enter a distinct valid name)");
+                } else {
+                    conflict_labels[i]->set_text(files_review_literal(conflict_item_names[i]) + " · " +
+                                                 conflict_kind_texts[i]);
+                }
+            }
+        }
+        if (summary_label)
+            summary_label->set_text(summary_text(model->summary(), active_conflicts));
+    }
+
     void present() {
         build_descriptor();
         presentation.emplace(present_modal_dialog(std::move(descriptor), application, desktop));
@@ -382,6 +483,14 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         if (!window)
             throw std::logic_error("Files operation review did not create a window");
         window_lifetime = window->lifetime_token();
+        bind_live_controls(window);
+        const auto weak = weak_from_this();
+        for (auto *inp : name_inputs) {
+            inp->on_change = [weak] {
+                if (const auto self = weak.lock())
+                    self->refresh_live_issues();
+            };
+        }
         const auto self = shared_from_this();
         presentation->set_completion_handler([self](DialogResult result) { self->complete(std::move(result)); });
     }

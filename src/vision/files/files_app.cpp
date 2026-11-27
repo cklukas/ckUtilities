@@ -571,11 +571,35 @@ struct FilesApp::State {
     std::weak_ptr<void> parity_report_lifetime;
     struct EmbeddedEditorInstance final {
         ckv::widgets::Window *window = nullptr;
+        ckv::widgets::TextEditor *editor = nullptr;
         std::weak_ptr<void> lifetime;
         std::shared_ptr<ckv::widgets::EditorDocument> document;
         FilesDocumentSnapshot snapshot;
         bool allow_discard_close = false;
     };
+    enum class ActiveViewMode { Pane, Editor, PreviewText, PreviewHex, PreviewHexOnly, Terminal, Report };
+    ActiveViewMode active_view_mode = ActiveViewMode::Pane;
+    std::vector<ckv::widgets::MenuBarItem> pane_menus;
+    ckv::ui::CommandId editor_save_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_undo_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_redo_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_cut_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_copy_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_paste_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_find_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_find_next_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_wrap_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_line_numbers_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId editor_close_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId preview_show_hex_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId preview_show_text_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId preview_close_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId terminal_focus_files_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId terminal_close_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId report_close_id = ckv::ui::kInvalidCommand;
+    std::function<void()> preview_toggle_action;
+    bool preview_is_hex = false;
+    bool preview_can_toggle = false;
     std::unique_ptr<ckv::widgets::SyntaxProfileRegistry> syntax_registry;
     std::vector<EmbeddedEditorInstance> embedded_editors;
     ckv::widgets::Window *embedded_terminal_window = nullptr;
@@ -1004,6 +1028,205 @@ struct FilesApp::State {
                     ckv::widgets::CommandPresentation{operation_recovery_cleanup_id, "Clean up operation staging"}, 24},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{options_id, "&View options"}, 20}};
             shell = std::make_unique<SuiteShell>(application, std::move(options));
+            pane_menus = shell->menu_bar()->menus();
+            const auto own_view_cmd = [&](std::string key, std::string title, std::string category,
+                                          std::optional<ckv::KeyChord> chord, std::string chord_label,
+                                          std::vector<std::string> contexts,
+                                          std::function<void()> handler, std::function<bool()> enabled) {
+                ckv::ui::CommandDescriptor desc;
+                desc.key = std::move(key);
+                desc.title = std::move(title);
+                desc.category = std::move(category);
+                desc.chord = std::move(chord_label);
+                desc.scope = ckv::ui::CommandScope{.contexts = std::move(contexts)};
+                desc.visibility = ckv::ui::CommandVisibility::Palette;
+                const auto bound_contexts = desc.scope.contexts;
+                desc.handler = std::move(handler);
+                const auto id = commands.own(application.commands().declare(std::move(desc)));
+                application.commands().set_enabled_predicate(id, std::move(enabled));
+                if (chord) {
+                    for (const auto &ctx : bound_contexts)
+                        application.commands().bind_key(*chord, id, ctx);
+                }
+                return id;
+            };
+            const auto editor_active = [this] { return active_embedded_editor() != nullptr; };
+            editor_save_id = own_view_cmd(
+                "ck.files.editor.save", "&Save", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "s"}, "Ctrl+S", {"ck.files.editor"},
+                [this] {
+                    if (const auto idx = active_embedded_editor_index())
+                        save_embedded_editor(*idx, false);
+                },
+                editor_active);
+            editor_undo_id = own_view_cmd(
+                "ck.files.editor.undo", "&Undo", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "z"}, "Ctrl+Z", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->perform(ckv::widgets::EditorCommand::Undo);
+                },
+                editor_active);
+            editor_redo_id = own_view_cmd(
+                "ck.files.editor.redo", "&Redo", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "y"}, "Ctrl+Y", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->perform(ckv::widgets::EditorCommand::Redo);
+                },
+                editor_active);
+            editor_cut_id = own_view_cmd(
+                "ck.files.editor.cut", "Cu&t", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "x"}, "Ctrl+X", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->cut_selection_to_clipboard();
+                },
+                editor_active);
+            editor_copy_id = own_view_cmd(
+                "ck.files.editor.copy", "&Copy", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "c"}, "Ctrl+C", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->copy_selection_to_clipboard();
+                },
+                editor_active);
+            editor_paste_id = own_view_cmd(
+                "ck.files.editor.paste", "&Paste", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "v"}, "Ctrl+V", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->paste_from_clipboard();
+                },
+                editor_active);
+            editor_find_id = own_view_cmd(
+                "ck.files.editor.find", "&Find", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "f"}, "Ctrl+F", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->perform(ckv::widgets::EditorCommand::FindSelection);
+                },
+                editor_active);
+            editor_find_next_id = own_view_cmd(
+                "ck.files.editor.find_next", "Find &next", "Editor",
+                ckv::KeyChord{ckv::Key::F3, ckv::Modifier::None, {}}, "F3", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->find_next(true);
+                },
+                editor_active);
+            editor_wrap_id = own_view_cmd(
+                "ck.files.editor.wrap", "&Word wrap", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Alt, "w"}, "Alt+W", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->set_wrap_mode(ed->wrap_mode() == ckv::widgets::WrapMode::None
+                                              ? ckv::widgets::WrapMode::Word
+                                              : ckv::widgets::WrapMode::None);
+                },
+                editor_active);
+            editor_line_numbers_id = own_view_cmd(
+                "ck.files.editor.line_numbers", "&Line numbers", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Alt, "n"}, "Alt+N", {"ck.files.editor"},
+                [this] {
+                    if (auto *ed = active_embedded_editor())
+                        ed->set_show_line_numbers(!ed->show_line_numbers());
+                },
+                editor_active);
+            editor_close_id = own_view_cmd(
+                "ck.files.editor.close", "&Close editor", "Editor",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "w"}, "Ctrl+W", {"ck.files.editor"},
+                [this] {
+                    if (const auto idx = active_embedded_editor_index())
+                        if (embedded_editors[*idx].window && !embedded_editors[*idx].lifetime.expired())
+                            embedded_editors[*idx].window->close();
+                },
+                editor_active);
+
+            preview_show_hex_id = own_view_cmd(
+                "ck.files.preview.show_hex", "Show &hex", "Preview",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "h"}, "H", {"ck.files.preview.text"},
+                [this] {
+                    if (preview_open() && preview_can_toggle && !preview_is_hex && preview_toggle_action)
+                        preview_toggle_action();
+                },
+                [this] { return preview_open() && preview_can_toggle && !preview_is_hex; });
+            preview_show_text_id = own_view_cmd(
+                "ck.files.preview.show_text", "Show &text", "Preview",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "t"}, "T", {"ck.files.preview.hex"},
+                [this] {
+                    if (preview_open() && preview_can_toggle && preview_is_hex && preview_toggle_action)
+                        preview_toggle_action();
+                },
+                [this] { return preview_open() && preview_can_toggle && preview_is_hex; });
+            preview_close_id = own_view_cmd(
+                "ck.files.preview.close", "&Close preview", "Preview",
+                ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, {}}, "Esc",
+                {"ck.files.preview.text", "ck.files.preview.hex", "ck.files.preview.hex_only"},
+                [this] {
+                    if (preview_open())
+                        preview_dialog_window->close();
+                },
+                [this] { return preview_open(); });
+
+            terminal_focus_files_id = own_view_cmd(
+                "ck.files.terminal.focus_files", "&Return to Files", "Terminal",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "o"}, "Ctrl+O", {"ck.files.terminal"},
+                [this] {
+                    if (surfaces[active] && surfaces[active]->grid)
+                        application.set_focus(surfaces[active]->grid);
+                    sync_active_view_chrome();
+                },
+                [this] { return embedded_terminal_window && !embedded_terminal_lifetime.expired(); });
+            terminal_close_id = own_view_cmd(
+                "ck.files.terminal.close", "&Close terminal", "Terminal",
+                ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "w"}, "Ctrl+W", {"ck.files.terminal"},
+                [this] {
+                    if (embedded_terminal_window && !embedded_terminal_lifetime.expired())
+                        embedded_terminal_window->close();
+                },
+                [this] { return embedded_terminal_window && !embedded_terminal_lifetime.expired(); });
+
+            report_close_id = own_view_cmd(
+                "ck.files.report.close", "&Close view", "View",
+                ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, {}}, "Esc", {"ck.files.report"},
+                [this] {
+                    if (parity_report_window && !parity_report_lifetime.expired())
+                        parity_report_window->close();
+                },
+                [this] { return parity_report_window && !parity_report_lifetime.expired(); });
+
+            if (auto *status = shell->status_line()) {
+                status->set_context_items("ck.files.editor", {
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_save_id, "&Save", "Ctrl+S"}, 40},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_close_id, "&Close", "Ctrl+W"}, 38},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_undo_id, "&Undo", "Ctrl+Z"}, 35},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_redo_id, "&Redo", "Ctrl+Y"}, 32},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_find_id, "&Find", "Ctrl+F"}, 30},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{editor_wrap_id, "&Wrap", "Alt+W"}, 25},
+                });
+                status->set_context_items("ck.files.preview.text", {
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{preview_show_hex_id, "Show &hex", "H"}, 40},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{preview_close_id, "&Close", "Esc"}, 38},
+                });
+                status->set_context_items("ck.files.preview.hex", {
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{preview_show_text_id, "Show &text", "T"}, 40},
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{preview_close_id, "&Close", "Esc"}, 38},
+                });
+                status->set_context_items("ck.files.preview.hex_only", {
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{preview_close_id, "&Close", "Esc"}, 38},
+                });
+                status->set_context_items("ck.files.terminal", {
+                    ckv::widgets::StatusLineItem{
+                        ckv::widgets::CommandPresentation{terminal_focus_files_id, "&Return to Files", "Ctrl+O"}, 40},
+                    ckv::widgets::StatusLineItem{
+                        ckv::widgets::CommandPresentation{terminal_close_id, "&Close terminal", "Ctrl+W"}, 35},
+                });
+                status->set_context_items("ck.files.report", {
+                    ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{report_close_id, "&Close view", "Esc"}, 40},
+                });
+            }
+
             shell->menu_bar()->on_highlight_changed = [this](const ckv::widgets::MenuHighlight &highlight) {
                 if (closing)
                     return;
@@ -1021,6 +1244,7 @@ struct FilesApp::State {
                             active = i;
                             layout();
                         }
+                    sync_active_view_chrome();
                     const bool focused = dynamic_cast<ckv::widgets::CommandPalette *>(application.focused()) != nullptr;
                     if (palette_focused != focused) {
                         palette_focused = focused;
@@ -3311,13 +3535,143 @@ struct FilesApp::State {
         }
         return std::nullopt;
     }
+    std::optional<std::size_t> active_embedded_editor_index() const {
+        const auto *focused = application.focused();
+        for (std::size_t i = embedded_editors.size(); i > 0; --i) {
+            const auto &ed = embedded_editors[i - 1];
+            if (ed.window && !ed.lifetime.expired() && ed.editor &&
+                (contains(ed.window, focused) || shell->desktop().active_window() == ed.window))
+                return i - 1;
+        }
+        return std::nullopt;
+    }
+    ckv::widgets::TextEditor *active_embedded_editor() const {
+        const auto idx = active_embedded_editor_index();
+        return idx ? embedded_editors[*idx].editor : nullptr;
+    }
+    std::vector<ckv::widgets::MenuBarItem> build_menus_for_mode(ActiveViewMode mode) const {
+        if (mode == ActiveViewMode::Pane)
+            return pane_menus;
+        using namespace ckv::widgets;
+        const auto cmd_item = [](ckv::ui::CommandId id, std::string label) {
+            return MenuItem::command(CommandPresentation{id, std::move(label)});
+        };
+        const auto make_file_menu = [&](std::vector<MenuItem> top_items) {
+            if (!top_items.empty())
+                top_items.push_back(MenuItem::separator());
+            if (shell->return_to_launcher_command() != ckv::ui::kInvalidCommand)
+                top_items.push_back(cmd_item(shell->return_to_launcher_command(), "Return to &Launcher"));
+            top_items.push_back(cmd_item(application.commands().standard().quit, "E&xit"));
+            return MenuBarItem{"&File", std::move(top_items)};
+        };
+        const auto help_menu = MenuBarItem{"&Help", {cmd_item(shell->about_command(), "&About...")}};
+        const auto palette_cmd = application.commands().standard().command_palette;
+
+        switch (mode) {
+        case ActiveViewMode::Editor:
+            return {
+                make_file_menu({cmd_item(editor_save_id, "&Save"), cmd_item(editor_close_id, "&Close editor")}),
+                MenuBarItem{"&Edit",
+                            {cmd_item(editor_undo_id, "&Undo"), cmd_item(editor_redo_id, "&Redo"),
+                             MenuItem::separator(), cmd_item(editor_cut_id, "Cu&t"),
+                             cmd_item(editor_copy_id, "&Copy"), cmd_item(editor_paste_id, "&Paste"),
+                             MenuItem::separator(), cmd_item(editor_find_id, "&Find selection"),
+                             cmd_item(editor_find_next_id, "Find &next")}},
+                MenuBarItem{"&View",
+                            {cmd_item(editor_wrap_id, "&Word wrap"),
+                             cmd_item(editor_line_numbers_id, "&Line numbers"), MenuItem::separator(),
+                             cmd_item(palette_cmd, "&Commands...")}},
+                help_menu};
+        case ActiveViewMode::PreviewText:
+            return {
+                make_file_menu({cmd_item(preview_close_id, "&Close preview")}),
+                MenuBarItem{"&View",
+                            {cmd_item(preview_show_hex_id, "Show &hex"), MenuItem::separator(),
+                             cmd_item(palette_cmd, "&Commands...")}},
+                help_menu};
+        case ActiveViewMode::PreviewHex:
+            return {
+                make_file_menu({cmd_item(preview_close_id, "&Close preview")}),
+                MenuBarItem{"&View",
+                            {cmd_item(preview_show_text_id, "Show &text"), MenuItem::separator(),
+                             cmd_item(palette_cmd, "&Commands...")}},
+                help_menu};
+        case ActiveViewMode::PreviewHexOnly:
+            return {
+                make_file_menu({cmd_item(preview_close_id, "&Close preview")}),
+                MenuBarItem{"&View", {cmd_item(palette_cmd, "&Commands...")}},
+                help_menu};
+        case ActiveViewMode::Terminal:
+            return {
+                make_file_menu({cmd_item(terminal_close_id, "&Close terminal")}),
+                MenuBarItem{"&Terminal",
+                            {cmd_item(terminal_focus_files_id, "&Return to Files"),
+                             cmd_item(terminal_close_id, "&Close terminal")}},
+                help_menu};
+        case ActiveViewMode::Report:
+            return {
+                make_file_menu({cmd_item(report_close_id, "&Close view")}),
+                MenuBarItem{"&View", {cmd_item(palette_cmd, "&Commands...")}},
+                help_menu};
+        case ActiveViewMode::Pane:
+            break;
+        }
+        return pane_menus;
+    }
+    ActiveViewMode detect_active_view_mode() const {
+        const auto *focused = application.focused();
+        if (preview_open() &&
+            (contains(preview_dialog_window, focused) || shell->desktop().active_window() == preview_dialog_window)) {
+            if (!preview_can_toggle)
+                return ActiveViewMode::PreviewHexOnly;
+            return preview_is_hex ? ActiveViewMode::PreviewHex : ActiveViewMode::PreviewText;
+        }
+        if (active_embedded_editor() != nullptr)
+            return ActiveViewMode::Editor;
+        if (embedded_terminal_window && !embedded_terminal_lifetime.expired() &&
+            (contains(embedded_terminal_window, focused) ||
+             shell->desktop().active_window() == embedded_terminal_window))
+            return ActiveViewMode::Terminal;
+        if (parity_report_window && !parity_report_lifetime.expired() &&
+            (contains(parity_report_window, focused) || shell->desktop().active_window() == parity_report_window))
+            return ActiveViewMode::Report;
+        return ActiveViewMode::Pane;
+    }
+    void sync_active_view_chrome() {
+        if (closing || !shell || !shell->menu_bar())
+            return;
+        if (shell->menu_bar()->active())
+            return;
+        const ActiveViewMode next = detect_active_view_mode();
+        if (next != active_view_mode) {
+            active_view_mode = next;
+            shell->menu_bar()->set_menus(build_menus_for_mode(next));
+        }
+        if (auto *status = shell->status_line())
+            status->invalidate();
+    }
     void show_parity_report(std::string title, std::string body) {
         using namespace ckv::widgets;
         if (parity_report_window && !parity_report_lifetime.expired())
             parity_report_window->close();
         auto win = std::make_unique<Window>(std::move(title));
+        win->set_command_context("ck.files.report");
         auto content = std::make_unique<TextView>();
+        content->set_command_context("ck.files.report");
         content->set_text(std::move(body));
+        auto *raw_content = content.get();
+        auto *raw_win = win.get();
+        win->cancel_request = [raw_win] { raw_win->close(); };
+        win->on_detached = [this, weak = std::weak_ptr<void>(lifetime), raw_win] {
+            if (weak.expired())
+                return;
+            if (parity_report_window == raw_win)
+                parity_report_window = nullptr;
+            if (surfaces[active] && surfaces[active]->grid)
+                application.set_focus(surfaces[active]->grid);
+            sync_active_view_chrome();
+            labels();
+        };
         win->set_content(std::move(content));
         const auto desk = shell->desktop().bounds();
         const int w = std::max(44, std::min(96, desk.width - 4));
@@ -3326,6 +3680,8 @@ struct FilesApp::State {
         parity_report_window = win.get();
         parity_report_lifetime = win->lifetime_token();
         shell->desktop().add_window(std::move(win));
+        application.set_focus(raw_content);
+        sync_active_view_chrome();
     }
     bool show_search() {
         if (!availability("ck.files.search").enabled)
@@ -3653,9 +4009,12 @@ struct FilesApp::State {
         }
         using namespace ckv::widgets;
         auto win = std::make_unique<Window>("Edit: " + title);
+        win->set_command_context("ck.files.editor");
         auto ed = std::make_unique<TextEditor>(doc, syntax_registry.get());
+        ed->set_command_context("ck.files.editor");
         ed->set_file_name(title);
         ed->set_show_line_numbers(true);
+        auto *raw_ed = ed.get();
         win->set_content(std::move(ed));
         const auto desk = shell->desktop().bounds();
         const int w = std::max(50, std::min(100, desk.width - 4));
@@ -3664,6 +4023,15 @@ struct FilesApp::State {
 
         Window *raw_win = win.get();
         auto win_life = win->lifetime_token();
+        win->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+            if (weak.expired())
+                return;
+            prune_embedded_editors();
+            if (embedded_editors.empty() && surfaces[active] && surfaces[active]->grid)
+                application.set_focus(surfaces[active]->grid);
+            sync_active_view_chrome();
+            labels();
+        };
         win->close_request = [this, weak = std::weak_ptr<void>(lifetime), raw_win, win_life, title]() -> bool {
             if (weak.expired() || win_life.expired())
                 return true;
@@ -3703,11 +4071,14 @@ struct FilesApp::State {
 
         EmbeddedEditorInstance inst;
         inst.window = raw_win;
+        inst.editor = raw_ed;
         inst.lifetime = win_life;
         inst.document = doc;
         inst.snapshot = std::move(snap);
         embedded_editors.push_back(std::move(inst));
         shell->desktop().add_window(std::move(win));
+        application.set_focus(raw_ed);
+        sync_active_view_chrome();
         labels();
         return true;
     }
@@ -3728,14 +4099,27 @@ struct FilesApp::State {
         auto spec = build_files_interactive_terminal_spec(cwd);
         auto &subsession = application.launch_terminal_subsession(std::move(spec));
         auto win = std::make_unique<Window>("Terminal: " + cwd);
+        win->set_command_context("ck.files.terminal");
         auto tview = std::make_unique<TerminalView>(subsession);
+        tview->set_command_context("ck.files.terminal");
+        auto *raw_tview = tview.get();
         tview->on_parent_escape = [this, weak = std::weak_ptr<void>(lifetime)] {
             if (weak.expired())
                 return;
             if (surfaces[active] && surfaces[active]->grid)
                 application.set_focus(surfaces[active]->grid);
+            sync_active_view_chrome();
             ++external_writer_epoch;
             refresh(active);
+        };
+        win->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+            if (weak.expired())
+                return;
+            embedded_terminal_window = nullptr;
+            if (surfaces[active] && surfaces[active]->grid)
+                application.set_focus(surfaces[active]->grid);
+            sync_active_view_chrome();
+            labels();
         };
         win->set_content(std::move(tview));
         const auto desk = shell->desktop().bounds();
@@ -3746,6 +4130,8 @@ struct FilesApp::State {
         embedded_terminal_lifetime = win->lifetime_token();
         ++external_writer_epoch;
         shell->desktop().add_window(std::move(win));
+        application.set_focus(raw_tview);
+        sync_active_view_chrome();
         labels();
         return true;
     }
@@ -4828,6 +5214,7 @@ struct FilesApp::State {
         const auto preview = std::move(reply.preview);
         auto text = preview_utf8(*preview);
         auto owner = std::make_unique<Window>(text ? "Text preview" : "Hex preview");
+        owner->set_command_context(text ? "ck.files.preview.text" : "ck.files.preview.hex_only");
         auto *const view = owner.get();
         const auto close = [view] { view->close(); };
         const auto &roles = shell->roles();
@@ -4845,6 +5232,10 @@ struct FilesApp::State {
             if (weak.expired())
                 return;
             preview_dialog_window = nullptr;
+            preview_toggle_action = {};
+            preview_is_hex = false;
+            preview_can_toggle = false;
+            sync_active_view_chrome();
             labels();
         };
         auto content = std::make_unique<ckv::ui::Column>();
@@ -4854,16 +5245,28 @@ struct FilesApp::State {
         content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding});
         auto buttons = std::make_unique<ckv::ui::Row>();
         buttons->set_spacing(1);
+        preview_is_hex = !text.has_value();
+        preview_can_toggle = text.has_value();
+        preview_toggle_action = {};
         if (text) {
             auto toggle = std::make_unique<Button>("Show &hex");
             auto *const mode = toggle.get();
-            toggle->on_press = [view, display, mode, decoded = std::move(*text), preview, hex = false]() mutable {
+            auto do_toggle = std::make_shared<std::function<void()>>();
+            *do_toggle = [this, weak = std::weak_ptr<void>(lifetime), view, display, mode,
+                          decoded = std::move(*text), preview, hex = false]() mutable {
+                if (weak.expired())
+                    return;
                 hex = !hex;
+                preview_is_hex = hex;
                 display->set_text(hex ? preview_hex(*preview) : decoded);
                 display->set_top_line(0);
                 mode->set_text(hex ? "Show &text" : "Show &hex");
                 view->set_title(hex ? "Hex preview" : "Text preview");
+                view->set_command_context(hex ? "ck.files.preview.hex" : "ck.files.preview.text");
+                sync_active_view_chrome();
             };
+            toggle->on_press = [do_toggle] { (*do_toggle)(); };
+            preview_toggle_action = [do_toggle] { (*do_toggle)(); };
             buttons->add_item(std::move(toggle));
         }
         auto dismiss = std::make_unique<Button>("&Close");
@@ -4873,6 +5276,7 @@ struct FilesApp::State {
         owner->set_content(std::move(content));
         preview_dialog_lifetime = view->lifetime_token();
         preview_dialog_window = shell->desktop().present_modal(WindowHandle{std::move(owner), display}, application);
+        sync_active_view_chrome();
         labels();
     }
     bool preview_open() const { return preview_dialog_window && !preview_dialog_lifetime.expired(); }

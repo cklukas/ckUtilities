@@ -1061,9 +1061,8 @@
 <text x="342" y="608" xml:space="preserve" fill="#aa0000">F4</text>
 <text x="369" y="608" xml:space="preserve" fill="#000000">Switch pane</text>
 <text x="486" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Insert Mark</text>
-<text x="603" y="608" xml:space="preserve" fill="#aa0000">Esc</text>
-<text x="639" y="608" xml:space="preserve" fill="#000000">Cancel activity</text>
-<text x="792" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Inspect archive recovery</text>
+<text x="603" y="608" xml:space="preserve" fill="#000000">Cancel activity</text>
+<text x="756" y="608" xml:space="preserve" fill="#aaaaaa" opacity="0.55">Inspect archive recovery</text>
 <g id="raster-plane">
 </g>
 </svg>
